@@ -129,6 +129,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .status-novo { background: var(--navy-light); color: var(--navy); }
 .status-abordado { background: #E8F4FD; color: #1565C0; }
 .status-proposta { background: var(--amber-light); color: var(--amber); }
+.status-negociacao { background: #F3E8FF; color: #6D28D9; }
 .status-fechado { background: var(--green-light); color: var(--green); }
 .status-descartado { background: var(--gray-100); color: var(--gray-500); }
 
@@ -190,7 +191,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .reminder-date { font-size: 12px; font-weight: 500; white-space: nowrap; }
 
 /* FUNNEL */
-.funnel-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+.funnel-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 1.5rem; }
 .funnel-step { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 1rem; text-align: center; cursor: pointer; transition: all 0.15s; }
 .funnel-step:hover { box-shadow: var(--shadow-sm); }
 .funnel-step.active-filter { border-color: var(--navy); background: var(--navy-light); }
@@ -213,12 +214,41 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .search-bar input { border: none; background: transparent; font-size: 13px; color: var(--gray-800); width: 100%; outline: none; font-family: inherit; }
 .search-bar input::placeholder { color: var(--gray-400); }
 
+/* KANBAN */
+.kanban-board { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 1.25rem; align-items: start; }
+.kanban-col { background: var(--gray-100); border-radius: var(--radius-md); padding: 10px 8px; min-height: 200px; }
+.kanban-col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 10px; }
+.kanban-col-title { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+.kanban-col-count { font-size: 11px; font-weight: 600; background: #fff; color: var(--gray-500); padding: 2px 7px; border-radius: 99px; border: 1px solid var(--gray-200); }
+.kanban-drop-zone { min-height: 80px; border-radius: var(--radius-sm); transition: background 0.15s; }
+.kanban-drop-zone.drag-over { background: rgba(27,58,107,0.07); outline: 2px dashed var(--navy); outline-offset: -2px; }
+.kanban-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 10px 11px; margin-bottom: 7px; cursor: grab; transition: box-shadow 0.15s, opacity 0.15s; user-select: none; }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.dragging { opacity: 0.4; box-shadow: var(--shadow-md); }
+.kanban-card:hover { box-shadow: var(--shadow-sm); border-color: var(--gray-300); }
+.kc-name { font-size: 13px; font-weight: 500; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 5px; }
+.kc-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.kc-phone { font-size: 11px; color: var(--gray-400); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kc-actions { display: flex; gap: 4px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--gray-100); }
+.kc-btn { flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid var(--gray-200); background: var(--gray-50); border-radius: 4px; cursor: pointer; color: var(--gray-600); font-family: inherit; font-weight: 500; transition: all 0.12s; white-space: nowrap; text-align: center; }
+.kc-btn:hover { background: var(--gray-100); border-color: var(--gray-300); }
+.kc-btn.edit { color: var(--navy); border-color: var(--navy-light); background: var(--navy-light); }
+.kc-btn.edit:hover { background: #d4e4f5; }
+.kanban-empty { text-align: center; padding: 1.5rem 0.5rem; color: var(--gray-300); font-size: 12px; }
+.col-novo    .kanban-col-header { border-bottom: 2px solid #94A3B8; }
+.col-abordado .kanban-col-header { border-bottom: 2px solid #3B82F6; }
+.col-proposta .kanban-col-header { border-bottom: 2px solid var(--amber); }
+.col-negociacao .kanban-col-header { border-bottom: 2px solid #8B5CF6; }
+.col-fechado .kanban-col-header { border-bottom: 2px solid var(--green); }
+.col-descartado .kanban-col-header { border-bottom: 2px solid var(--gray-300); }
+
 /* RESPONSIVE */
 @media (max-width: 900px) {
   .sidebar { width: 200px; }
   .main { margin-left: 200px; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .funnel-row { grid-template-columns: repeat(3, 1fr); }
+  .kanban-board { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 640px) {
   .sidebar { transform: translateX(-100%); }
@@ -309,7 +339,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <div class="stat-card accent-a">
             <div class="stat-label">Prioridade A</div>
             <div class="stat-value" id="ds-a">0</div>
-            <div class="stat-sub">20+ pontos</div>
+            <div class="stat-sub">20–28 pontos</div>
           </div>
           <div class="stat-card accent-b">
             <div class="stat-label">Prioridade B</div>
@@ -370,33 +400,17 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <div id="view-funil" class="view">
         <div class="page-header">
           <h1>Funil de Vendas</h1>
-          <p>Acompanhe o status de cada contato</p>
+          <p>Arraste os cards entre as colunas para mover um contato de etapa</p>
         </div>
         <div class="funnel-row" id="funil-row"></div>
-        <div class="action-bar">
-          <div class="action-bar-left" id="funil-filters"></div>
+        <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
           <div class="search-bar">
             <span style="color:var(--gray-400);font-size:13px">🔍</span>
-            <input type="text" id="funil-search" placeholder="Buscar..." oninput="renderFunil()">
+            <input type="text" id="funil-search" placeholder="Filtrar contatos..." oninput="renderKanban()">
           </div>
+          <span style="font-size:12px;color:var(--gray-400)">Arraste os cards para mudar o status</span>
         </div>
-        <div class="card" style="overflow:hidden">
-          <table class="list-table" id="funil-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Nome</th>
-                <th>Grupo</th>
-                <th>Telefone</th>
-                <th>Prioridade</th>
-                <th>Status</th>
-                <th>Última ação</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="funil-tbody"></tbody>
-          </table>
-        </div>
+        <div class="kanban-board" id="kanban-board"></div>
       </div>
 
       <!-- LEMBRETES -->
@@ -486,9 +500,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <select id="f-renda">
             <option value="">Selecione...</option>
             <option value="0">Até R$ 5 mil/mês</option>
-            <option value="1">R$ 5–10 mil/mês</option>
-            <option value="2">R$ 10–20 mil/mês</option>
-            <option value="3">Mais de R$ 20 mil/mês</option>
+            <option value="2">R$ 5–10 mil/mês</option>
+            <option value="4">R$ 10–20 mil/mês</option>
+            <option value="6">Mais de R$ 20 mil/mês</option>
           </select>
         </div>
         <div class="form-group">
@@ -496,18 +510,18 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <select id="f-idade">
             <option value="">Selecione...</option>
             <option value="0">Até 25 anos</option>
-            <option value="1">25–34 anos</option>
-            <option value="2">35–54 anos</option>
-            <option value="3">Mais de 55 anos</option>
+            <option value="2">25–34 anos</option>
+            <option value="4">35–54 anos</option>
+            <option value="1">Mais de 55 anos</option>
           </select>
         </div>
         <div class="form-group">
           <label>Profissão</label>
           <select id="f-prof">
             <option value="">Selecione...</option>
-            <option value="3">Profissional liberal</option>
-            <option value="2">CLT / executivo</option>
-            <option value="3">Proprietário / sócio</option>
+            <option value="5">Profissional liberal</option>
+            <option value="3">CLT / executivo</option>
+            <option value="5">Proprietário / sócio</option>
             <option value="1">Autônomo</option>
           </select>
         </div>
@@ -518,14 +532,14 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             <option value="1">Solteiro(a)</option>
             <option value="1">Divorciado(a)</option>
             <option value="0">Viúvo(a)</option>
-            <option value="3">Casado(a)</option>
+            <option value="4">Casado(a)</option>
           </select>
         </div>
         <div class="form-group">
           <label>Facilidade de abordagem</label>
           <select id="f-abord">
             <option value="">Selecione...</option>
-            <option value="3">Fácil — amigo próximo</option>
+            <option value="4">Fácil — amigo próximo</option>
             <option value="2">Moderado — colega</option>
             <option value="1">Difícil — conhecido</option>
           </select>
@@ -534,8 +548,8 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <label>Capacidade de indicar</label>
           <select id="f-ref">
             <option value="">Selecione...</option>
-            <option value="3">Excelente</option>
-            <option value="2">Boa</option>
+            <option value="5">Excelente</option>
+            <option value="3">Boa</option>
             <option value="1">Razoável</option>
             <option value="0">Fraca</option>
           </select>
@@ -550,8 +564,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             <option value="novo">Novo</option>
             <option value="abordado">Abordado</option>
             <option value="proposta">Proposta enviada</option>
+            <option value="negociacao">Em negociação</option>
             <option value="fechado">Fechado ✓</option>
-            <option value="descartado">Descartado</option>
+            <option value="descartado">Não concluído</option>
           </select>
         </div>
         <div class="form-group">
@@ -565,7 +580,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       </div>
 
       <div id="score-preview" style="display:none;background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-top:4px">
-        Pontuação estimada: <strong id="score-val">—</strong> &nbsp;→&nbsp; <span id="score-lbl">—</span>
+        Pontuação: <strong id="score-val">—</strong> / 28 &nbsp;→&nbsp; <span id="score-lbl">—</span>
       </div>
     </div>
     <div class="modal-footer">
@@ -618,11 +633,12 @@ const SOURCES = [
 ];
 const SCORE_FIELDS = ['renda','idade','prof','civil','abord','ref'];
 const STATUS_META = {
-  novo:       {label:'Novo',             cls:'status-novo'},
-  abordado:   {label:'Abordado',         cls:'status-abordado'},
-  proposta:   {label:'Proposta enviada', cls:'status-proposta'},
-  fechado:    {label:'Fechado ✓',        cls:'status-fechado'},
-  descartado: {label:'Descartado',       cls:'status-descartado'},
+  novo:        {label:'Novo',             cls:'status-novo'},
+  abordado:    {label:'Abordado',         cls:'status-abordado'},
+  proposta:    {label:'Proposta enviada', cls:'status-proposta'},
+  negociacao:  {label:'Em negociação',    cls:'status-negociacao'},
+  fechado:     {label:'Fechado ✓',        cls:'status-fechado'},
+  descartado:  {label:'Não concluído',    cls:'status-descartado'},
 };
 
 let contacts = {};
@@ -805,46 +821,119 @@ function renderGrid(){
   document.getElementById('lista-grid').innerHTML = html;
 }
 
-// ─── FUNIL ───────────────────────────────────────────────────────────────────
-function renderFunil(){
+// ─── FUNIL / KANBAN ──────────────────────────────────────────────────────────
+const KANBAN_COLS = [
+  {key:'novo',       label:'Novo',             cls:'col-novo'},
+  {key:'abordado',   label:'Abordado',         cls:'col-abordado'},
+  {key:'proposta',   label:'Proposta',         cls:'col-proposta'},
+  {key:'negociacao', label:'Negociação',       cls:'col-negociacao'},
+  {key:'fechado',    label:'Fechado',          cls:'col-fechado'},
+  {key:'descartado', label:'Não concluído',    cls:'col-descartado'},
+];
+
+let dragId = null;
+
+function renderFunil(){ renderKanban(); }
+
+function renderKanban(){
   const all = allFilled();
-  const counts = {todos:all.length, novo:0, abordado:0, proposta:0, fechado:0, descartado:0};
-  all.forEach(c=>{ if(counts[c.status||'novo']!==undefined) counts[c.status||'novo']++; });
+  // counters row
+  const counts = {todos:all.length};
+  KANBAN_COLS.forEach(c=>{ counts[c.key]=0; });
+  all.forEach(c=>{ const k=c.status||'novo'; if(counts[k]!==undefined) counts[k]++; });
   const fr = document.getElementById('funil-row');
   fr.innerHTML = [
-    {key:'todos',s:'',label:'Total',num:counts.todos},
-    {key:'novo',s:'s-novo',label:'Novos',num:counts.novo},
-    {key:'abordado',s:'s-abordado',label:'Abordados',num:counts.abordado},
-    {key:'proposta',s:'s-proposta',label:'Propostas',num:counts.proposta},
-    {key:'fechado',s:'s-fechado',label:'Fechados',num:counts.fechado},
-  ].map(f=>`<div class="funnel-step ${f.s} ${funilFilter===f.key?'active-filter':''}" onclick="setFunilFilter('${f.key}')">
+    {key:'todos', s:'', label:'Total', num:counts.todos},
+    ...KANBAN_COLS.map(c=>({key:c.key, s:'s-'+c.key, label:c.label, num:counts[c.key]}))
+  ].map(f=>`<div class="funnel-step ${f.s}">
     <div class="funnel-num">${f.num}</div>
     <div class="funnel-label">${f.label}</div>
   </div>`).join('');
-  const q = (document.getElementById('funil-search')||{value:''}).value.toLowerCase();
-  let list = all.filter(c=>{
-    if(funilFilter!=='todos'&&(c.status||'novo')!==funilFilter) return false;
-    if(q&&!c.name.toLowerCase().includes(q)) return false;
-    return true;
-  }).map(c=>({...c,score:calcScore(c)})).sort((a,b)=>(b.score||0)-(a.score||0));
-  const tbody = document.getElementById('funil-tbody');
-  if(!list.length){ tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum contato encontrado</td></tr>`; return; }
-  tbody.innerHTML = list.map((c,i)=>{
-    const sm = scoreMeta(c.score);
-    const st = STATUS_META[c.status||'novo'];
-    return `<tr style="cursor:pointer" onclick="openModal(null,'${c.id}')">
-      <td class="td-muted">${i+1}</td>
-      <td class="td-name">${c.name}</td>
-      <td class="td-muted" style="font-size:12px">${srcLabel(c.source)}</td>
-      <td class="td-muted">${c.phone||'—'}</td>
-      <td><span class="score-badge ${sm.cls}">${sm.l}${c.score!==null?' '+c.score:''}</span></td>
-      <td><span class="status-badge ${st.cls}">${st.label}</span></td>
-      <td class="td-muted" style="font-size:12px">${c.lembrete?'🔔 '+fmtDate(c.lembrete):'—'}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openModal(null,'${c.id}')">Editar</button></td>
-    </tr>`;
+
+  const q = (document.getElementById('funil-search')||{value:''}).value.toLowerCase().trim();
+  const board = document.getElementById('kanban-board');
+
+  board.innerHTML = KANBAN_COLS.map(col=>{
+    const cards = all
+      .filter(c=>(c.status||'novo')===col.key)
+      .filter(c=>!q||c.name.toLowerCase().includes(q))
+      .map(c=>({...c, score:calcScore(c)}))
+      .sort((a,b)=>(b.score||0)-(a.score||0));
+
+    const cardsHtml = cards.length ? cards.map(c=>{
+      const sm = scoreMeta(c.score);
+      return `<div class="kanban-card"
+        draggable="true"
+        data-id="${c.id}"
+        ondragstart="onDragStart(event,'${c.id}')"
+        ondragend="onDragEnd(event)">
+        <div class="kc-name" title="${c.name}">${c.name}</div>
+        <div class="kc-meta">
+          <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}${c.score!==null?' '+c.score:''}</span>
+          <span class="kc-phone">${c.phone||srcLabel(c.source)}</span>
+          ${c.lembrete&&c.lembrete<=today()?`<span style="color:var(--red);font-size:11px">🔔</span>`:''}
+        </div>
+        <div class="kc-actions">
+          <button class="kc-btn edit" onclick="openModal(null,'${c.id}')">✏️ Editar</button>
+          ${KANBAN_COLS.filter(nc=>nc.key!==col.key).slice(0,2).map(nc=>
+            `<button class="kc-btn" onclick="moveCard('${c.id}','${nc.key}')" title="Mover para ${nc.label}">→ ${nc.label}</button>`
+          ).join('')}
+        </div>
+      </div>`;
+    }).join('') : `<div class="kanban-empty">Nenhum contato</div>`;
+
+    return `<div class="kanban-col ${col.cls}">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title">${col.label}</span>
+        <span class="kanban-col-count">${cards.length}</span>
+      </div>
+      <div class="kanban-drop-zone"
+        data-col="${col.key}"
+        ondragover="onDragOver(event)"
+        ondragenter="onDragEnter(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event,'${col.key}')">
+        ${cardsHtml}
+      </div>
+    </div>`;
   }).join('');
 }
-function setFunilFilter(f){ funilFilter=f; renderFunil(); }
+
+function moveCard(id, newStatus){
+  if(!contacts[id]) return;
+  contacts[id].status = newStatus;
+  save();
+  renderKanban();
+  updateBadges();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+  showToast(`Movido para ${STATUS_META[newStatus].label}`);
+}
+
+function onDragStart(e, id){
+  dragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(()=>{ const el=document.querySelector(`[data-id="${id}"]`); if(el) el.classList.add('dragging'); }, 0);
+}
+function onDragEnd(e){
+  document.querySelectorAll('.kanban-card.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.kanban-drop-zone.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  dragId = null;
+}
+function onDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; }
+function onDragEnter(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function onDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function onDrop(e, colKey){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(dragId && contacts[dragId]){
+    contacts[dragId].status = colKey;
+    save();
+    renderKanban();
+    updateBadges();
+    if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+    showToast(`Movido para ${STATUS_META[colKey].label}`);
+  }
+}
 
 // ─── LEMBRETES ───────────────────────────────────────────────────────────────
 function renderLembretes(){
