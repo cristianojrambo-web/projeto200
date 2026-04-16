@@ -6,6 +6,7 @@
 <title>Projeto 200 — EGS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --navy: #1B3A6B;
@@ -205,7 +206,25 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 /* SECTION GROUP HEADERS */
 .grp-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); padding: 0.75rem 0 0.4rem; margin-top: 0.5rem; }
 
-/* TOAST */
+/* LOGIN SCREEN */
+#login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--navy); }
+.login-box { background:#fff; border-radius:var(--radius-lg); padding:2.5rem 2rem; width:360px; max-width:94vw; box-shadow:var(--shadow-lg); }
+.login-logo { text-align:center; margin-bottom:1.75rem; }
+.login-logo .brand { font-size:28px; font-weight:600; color:var(--navy); letter-spacing:0.03em; }
+.login-logo .sub { font-size:13px; color:var(--gray-500); margin-top:4px; }
+.login-box h2 { font-size:16px; font-weight:600; color:var(--gray-800); margin-bottom:1.25rem; text-align:center; }
+.login-error { background:var(--red-light); color:#A32D2D; font-size:13px; padding:9px 12px; border-radius:var(--radius-sm); margin-bottom:1rem; display:none; }
+.login-error.show { display:block; }
+.login-footer { text-align:center; margin-top:1rem; font-size:12px; color:var(--gray-400); }
+.login-switch { font-size:13px; text-align:center; margin-top:1rem; color:var(--gray-500); }
+.login-switch a { color:var(--navy); cursor:pointer; font-weight:500; text-decoration:none; }
+.login-switch a:hover { text-decoration:underline; }
+.login-loading { text-align:center; padding:1rem; color:var(--gray-400); font-size:13px; display:none; }
+/* LOADING OVERLAY */
+#app-loading { position:fixed; inset:0; background:#fff; display:flex; align-items:center; justify-content:center; z-index:999; flex-direction:column; gap:12px; }
+#app-loading .spinner { width:32px; height:32px; border:3px solid var(--gray-200); border-top-color:var(--navy); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#app-loading p { font-size:13px; color:var(--gray-400); }
 .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: var(--gray-900); color: #fff; padding: 10px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
 .toast.show { opacity: 1; }
 
@@ -270,7 +289,54 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 </style>
 </head>
 <body>
-<div class="app-shell">
+<!-- APP LOADING -->
+<div id="app-loading">
+  <div class="spinner"></div>
+  <p>Carregando...</p>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="display:none">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="brand">EGS</div>
+      <div class="sub">Projeto 200 — Prospecção</div>
+    </div>
+    <h2 id="login-title">Entrar na sua conta</h2>
+    <div class="login-error" id="login-error"></div>
+    <div id="login-form">
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="login-email" placeholder="seu@email.com.br" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem" onclick="doLogin()">Entrar</button>
+      <div class="login-switch">Não tem conta? <a onclick="showRegister()">Criar conta</a></div>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="form-group">
+        <label>Seu nome</label>
+        <input type="text" id="reg-name" placeholder="Ex: João Silva">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="reg-email" placeholder="seu@email.com.br" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Senha (mín. 6 caracteres)</label>
+        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem" onclick="doRegister()">Criar conta</button>
+      <div class="login-switch">Já tem conta? <a onclick="showLogin()">Entrar</a></div>
+    </div>
+    <div class="login-footer">EGS / Investseg — uso interno</div>
+  </div>
+</div>
+
+<div class="app-shell" id="app-shell" style="display:none">
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
@@ -301,10 +367,11 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="sidebar-footer">
       <div class="user-badge">
         <div class="user-avatar" id="user-avatar">C</div>
-        <div>
+        <div style="flex:1;min-width:0">
           <div class="user-name" id="user-name-display">Corretor</div>
           <div class="user-role">EGS / Investseg</div>
         </div>
+        <button onclick="doLogout()" title="Sair" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);font-size:16px;padding:4px;line-height:1" title="Sair">⏻</button>
       </div>
     </div>
   </aside>
@@ -467,6 +534,8 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 
     </div><!-- /content -->
   </div><!-- /main -->
+</div><!-- /app-shell -->
+
 </div><!-- /app-shell -->
 
 <!-- MODAL CONTATO -->
@@ -646,11 +715,160 @@ let activeSrc = SOURCES[0].key;
 let funilFilter = 'todos';
 let lembreteFilter = 'todos';
 let editId = null;
+let currentUser = null;
 
-// ─── PERSISTENCE ─────────────────────────────────────────────────────────────
-function load(){ try { const s = localStorage.getItem('egs_p200'); if(s) contacts = JSON.parse(s); } catch(e){} }
-function save(){ try { localStorage.setItem('egs_p200', JSON.stringify(contacts)); } catch(e){} }
-load();
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPA_URL = 'https://gzzpcorctunadifxweea.supabase.co';
+const SUPA_KEY = 'sb_publishable_5uowcjcikibBLXFj7z60nQ_pKoRzxgD';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function showLogin(){
+  document.getElementById('login-form').style.display='';
+  document.getElementById('register-form').style.display='none';
+  document.getElementById('login-title').textContent='Entrar na sua conta';
+  document.getElementById('login-error').classList.remove('show');
+}
+function showRegister(){
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('register-form').style.display='';
+  document.getElementById('login-title').textContent='Criar conta';
+  document.getElementById('login-error').classList.remove('show');
+}
+function showLoginError(msg){
+  const el=document.getElementById('login-error');
+  el.textContent=msg; el.classList.add('show');
+}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  if(!email||!pass){ showLoginError('Preencha e-mail e senha.'); return; }
+  const btn=document.querySelector('#login-form .btn-primary');
+  btn.textContent='Entrando...'; btn.disabled=true;
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.textContent='Entrar'; btn.disabled=false;
+  if(error){ showLoginError(error.message==='Invalid login credentials'?'E-mail ou senha incorretos.':error.message); return; }
+  await initApp(data.user);
+}
+
+async function doRegister(){
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const pass=document.getElementById('reg-password').value;
+  if(!name||!email||!pass){ showLoginError('Preencha todos os campos.'); return; }
+  if(pass.length<6){ showLoginError('Senha deve ter mínimo 6 caracteres.'); return; }
+  const btn=document.querySelector('#register-form .btn-primary');
+  btn.textContent='Criando...'; btn.disabled=true;
+  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
+  btn.textContent='Criar conta'; btn.disabled=false;
+  if(error){ showLoginError(error.message); return; }
+  await initApp(data.user);
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  contacts={};
+  document.getElementById('app-shell').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  showLogin();
+}
+
+// ─── PERSISTENCE (Supabase) ──────────────────────────────────────────────────
+async function loadContacts(){
+  const {data,error}=await sb.from('contacts').select('*').order('created_at',{ascending:true});
+  if(error){ console.error(error); return; }
+  contacts={};
+  (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+}
+
+function dbToLocal(c){
+  return {
+    id:c.id, name:c.name, phone:c.phone||'', source:c.source||'',
+    renda:c.renda, idade:c.idade, prof:c.prof, civil:c.civil, abord:c.abord, ref:c.ref,
+    status:c.status||'novo', lembrete:c.lembrete||'', obs:c.obs||''
+  };
+}
+
+async function saveContact(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){ document.getElementById('f-name').style.borderColor='var(--red)'; return; }
+  document.getElementById('f-name').style.borderColor='';
+
+  const data={
+    name, phone:document.getElementById('f-phone').value.trim(),
+    source:document.getElementById('f-source').value,
+    status:document.getElementById('f-status').value,
+    lembrete:document.getElementById('f-lembrete').value||null,
+    obs:document.getElementById('f-obs').value.trim(),
+    user_id:currentUser.id,
+  };
+  SCORE_FIELDS.forEach(f=>{ const el=document.getElementById('f-'+f); if(el) data[f]=el.value!==''?parseInt(el.value):null; });
+
+  const btn=document.querySelector('#modal-overlay .btn-primary');
+  btn.textContent='Salvando...'; btn.disabled=true;
+
+  let error;
+  if(editId && contacts[editId]){
+    ({error}=await sb.from('contacts').update({...data,updated_at:new Date().toISOString()}).eq('id',editId));
+    if(!error) contacts[editId]={...contacts[editId],...dbToLocal({...data,id:editId})};
+  } else {
+    const {data:row,error:err}=await sb.from('contacts').insert(data).select().single();
+    error=err;
+    if(!error && row) contacts[row.id]=dbToLocal(row);
+  }
+
+  btn.textContent='Salvar contato'; btn.disabled=false;
+  if(error){ showToast('Erro ao salvar: '+error.message); return; }
+
+  closeModal();
+  refreshCurrentView();
+  updateBadges();
+  showToast('Contato salvo ✓');
+}
+
+async function deleteContact(){
+  if(!editId) return;
+  if(!confirm('Remover este contato?')) return;
+  const {error}=await sb.from('contacts').delete().eq('id',editId);
+  if(error){ showToast('Erro ao remover: '+error.message); return; }
+  delete contacts[editId];
+  closeModal();
+  refreshCurrentView();
+  updateBadges();
+  showToast('Contato removido');
+}
+
+async function moveCard(id, newStatus){
+  if(!contacts[id]) return;
+  const {error}=await sb.from('contacts').update({status:newStatus,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  contacts[id].status=newStatus;
+  renderKanban();
+  updateBadges();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+  showToast(`Movido para ${STATUS_META[newStatus].label}`);
+}
+
+async function markDone(id){
+  if(!contacts[id]) return;
+  const {error}=await sb.from('contacts').update({lembrete:null,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  contacts[id].lembrete='';
+  renderLembretes();
+  updateBadges();
+  showToast('Lembrete concluído');
+}
+
+function refreshCurrentView(){
+  const active=document.querySelector('.view.active');
+  if(!active) return;
+  const vid=active.id;
+  if(vid==='view-lista'){ renderChips(); renderGrid(); }
+  if(vid==='view-funil') renderFunil();
+  if(vid==='view-lembretes') renderLembretes();
+  if(vid==='view-dashboard') renderDashboard();
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function calcScore(c){
@@ -899,16 +1117,6 @@ function renderKanban(){
   }).join('');
 }
 
-function moveCard(id, newStatus){
-  if(!contacts[id]) return;
-  contacts[id].status = newStatus;
-  save();
-  renderKanban();
-  updateBadges();
-  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
-  showToast(`Movido para ${STATUS_META[newStatus].label}`);
-}
-
 function onDragStart(e, id){
   dragId = id;
   e.dataTransfer.effectAllowed = 'move';
@@ -925,14 +1133,7 @@ function onDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
 function onDrop(e, colKey){
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  if(dragId && contacts[dragId]){
-    contacts[dragId].status = colKey;
-    save();
-    renderKanban();
-    updateBadges();
-    if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
-    showToast(`Movido para ${STATUS_META[colKey].label}`);
-  }
+  if(dragId && contacts[dragId]) moveCard(dragId, colKey);
 }
 
 // ─── LEMBRETES ───────────────────────────────────────────────────────────────
@@ -971,7 +1172,6 @@ function renderLembretes(){
   }).join('');
 }
 function setLembreteFilter(f,el){ lembreteFilter=f; document.querySelectorAll('.chips-row .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderLembretes(); }
-function markDone(id){ if(contacts[id]){ contacts[id].lembrete=''; save(); renderLembretes(); updateBadges(); showToast('Lembrete concluído'); } }
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function openModal(srcKey, id){
@@ -1022,58 +1222,6 @@ function updateScorePreview(){
 document.querySelectorAll('#modal-overlay select, #modal-overlay input[type=text]').forEach(el=>{
   el.addEventListener('change', updateScorePreview);
 });
-
-function saveContact(){
-  const name = document.getElementById('f-name').value.trim();
-  if(!name){ document.getElementById('f-name').style.borderColor='var(--red)'; return; }
-  document.getElementById('f-name').style.borderColor='';
-  const data = {
-    name,
-    phone: document.getElementById('f-phone').value.trim(),
-    source: document.getElementById('f-source').value,
-    status: document.getElementById('f-status').value,
-    lembrete: document.getElementById('f-lembrete').value,
-    obs: document.getElementById('f-obs').value.trim(),
-  };
-  SCORE_FIELDS.forEach(f=>{ const el=document.getElementById('f-'+f); if(el) data[f]=el.value!==''?parseInt(el.value):null; });
-  if(editId && contacts[editId]){
-    contacts[editId] = {...contacts[editId], ...data};
-  } else {
-    const id = 'c'+Date.now()+Math.random().toString(36).substr(2,4);
-    contacts[id] = {id, ...data};
-  }
-  save();
-  closeModal();
-  // refresh current view
-  const active = document.querySelector('.view.active');
-  if(active){
-    const vid = active.id;
-    if(vid==='view-lista'){ renderChips(); renderGrid(); }
-    if(vid==='view-funil') renderFunil();
-    if(vid==='view-lembretes') renderLembretes();
-    if(vid==='view-dashboard') renderDashboard();
-  }
-  updateBadges();
-  showToast('Contato salvo ✓');
-}
-
-function deleteContact(){
-  if(!editId) return;
-  if(!confirm('Remover este contato?')) return;
-  delete contacts[editId];
-  save();
-  closeModal();
-  const active = document.querySelector('.view.active');
-  if(active){
-    const vid = active.id;
-    if(vid==='view-lista'){ renderChips(); renderGrid(); }
-    if(vid==='view-funil') renderFunil();
-    if(vid==='view-lembretes') renderLembretes();
-    if(vid==='view-dashboard') renderDashboard();
-  }
-  updateBadges();
-  showToast('Contato removido');
-}
 
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); editId=null; }
 function closeModalOuter(e){ if(e.target===document.getElementById('modal-overlay')) closeModal(); }
@@ -1138,8 +1286,44 @@ function exportRelatorio(){
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
-renderDashboard();
-updateBadges();
+async function initApp(user){
+  currentUser = user;
+  const name = user.user_metadata?.full_name || user.email.split('@')[0];
+  document.getElementById('user-name-display').textContent = name;
+  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-loading').style.display='flex';
+  document.getElementById('app-loading').querySelector('p').textContent='Carregando seus contatos...';
+
+  await loadContacts();
+
+  document.getElementById('app-loading').style.display='none';
+  document.getElementById('app-shell').style.display='flex';
+
+  renderDashboard();
+  updateBadges();
+}
+
+// Check existing session on page load
+(async()=>{
+  const {data:{session}}=await sb.auth.getSession();
+  if(session?.user){
+    await initApp(session.user);
+  } else {
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+  }
+})();
+
+// Login form keyboard support
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Enter') return;
+  if(document.getElementById('login-form').style.display!=='none'&&
+     document.getElementById('login-screen').style.display!=='none') doLogin();
+  if(document.getElementById('register-form').style.display!==''&&
+     document.getElementById('login-screen').style.display!=='none') doRegister();
+});
 
 // update score preview on field change
 document.getElementById('modal-overlay').addEventListener('change', function(e){
