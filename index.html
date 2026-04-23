@@ -220,6 +220,17 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .login-switch a { color:var(--navy); cursor:pointer; font-weight:500; text-decoration:none; }
 .login-switch a:hover { text-decoration:underline; }
 .login-loading { text-align:center; padding:1rem; color:var(--gray-400); font-size:13px; display:none; }
+/* GRUPOS EDIT */
+.grupo-row { background:#fff; border:1px solid var(--gray-200); border-radius:var(--radius-md); padding:10px 14px; display:flex; align-items:center; gap:12px; }
+.grupo-row .grp-tag { font-size:11px; font-weight:600; background:var(--navy-light); color:var(--navy); padding:2px 8px; border-radius:99px; white-space:nowrap; }
+.grupo-row input[type=text] { flex:1; border:1px solid var(--gray-200); border-radius:var(--radius-sm); padding:6px 10px; font-size:13px; font-family:inherit; color:var(--gray-900); }
+.grupo-row input[type=text]:focus { outline:none; border-color:var(--navy); }
+.grupo-row input[type=number] { width:64px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); padding:6px 8px; font-size:13px; font-family:inherit; color:var(--gray-900); text-align:center; }
+.grupo-row input[type=number]:focus { outline:none; border-color:var(--navy); }
+.grupo-row .grp-save { font-size:11px; color:var(--green); font-weight:600; opacity:0; transition:opacity 0.3s; }
+.grupo-row .grp-save.show { opacity:1; }
+/* MASTER */
+.master-badge { font-size:11px; font-weight:600; background:var(--gold-light); color:var(--gold); padding:2px 8px; border-radius:99px; margin-left:6px; }
 /* LOADING OVERLAY */
 #app-loading { position:fixed; inset:0; background:#fff; display:flex; align-items:center; justify-content:center; z-index:999; flex-direction:column; gap:12px; }
 #app-loading .spinner { width:32px; height:32px; border:3px solid var(--gray-200); border-top-color:var(--navy); border-radius:50%; animation:spin 0.8s linear infinite; }
@@ -360,8 +371,14 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <span id="lembrete-badge" style="margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
       <div class="nav-section" style="margin-top:0.75rem">Ferramentas</div>
+      <div class="nav-item" onclick="goTo('grupos',this)">
+        <span class="icon">🗂️</span> Meus Grupos
+      </div>
       <div class="nav-item" onclick="goTo('exportar',this)">
         <span class="icon">⬇️</span> Exportar
+      </div>
+      <div class="nav-item" id="nav-master" style="display:none" onclick="goTo('master',this)">
+        <span class="icon">👑</span> Visão Master
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -532,10 +549,52 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         </div>
       </div>
 
+      <!-- GRUPOS -->
+      <div id="view-grupos" class="view">
+        <div class="page-header">
+          <h1>Meus Grupos de Contato</h1>
+          <p>Personalize os nomes e cotas de cada grupo da sua lista</p>
+        </div>
+        <div class="action-bar">
+          <div style="font-size:13px;color:var(--gray-500)">Edite o nome ou a quantidade de slots de cada grupo. As alterações são salvas automaticamente.</div>
+          <button class="btn btn-primary btn-sm" onclick="resetGroups()">↺ Restaurar padrão</button>
+        </div>
+        <div id="grupos-list" style="display:flex;flex-direction:column;gap:8px;margin-top:0.5rem"></div>
+      </div>
+
+      <!-- MASTER -->
+      <div id="view-master" class="view">
+        <div class="page-header">
+          <h1>Visão Master</h1>
+          <p>Todos os corretores e suas listas</p>
+        </div>
+        <div class="stats-row" id="master-stats"></div>
+        <div class="action-bar" style="margin-top:1rem">
+          <div class="chips-row" id="master-user-chips" style="margin:0"></div>
+          <div class="search-bar">
+            <span style="color:var(--gray-400);font-size:13px">🔍</span>
+            <input type="text" id="master-search" placeholder="Buscar contato..." oninput="renderMaster()">
+          </div>
+        </div>
+        <div class="card" style="overflow:hidden;margin-top:1rem">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>Corretor</th>
+                <th>Nome</th>
+                <th>Grupo</th>
+                <th>Telefone</th>
+                <th>Prioridade</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="master-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main -->
-</div><!-- /app-shell -->
-
 </div><!-- /app-shell -->
 
 <!-- MODAL CONTATO -->
@@ -716,6 +775,11 @@ let funilFilter = 'todos';
 let lembreteFilter = 'todos';
 let editId = null;
 let currentUser = null;
+let isMaster = false;
+let masterFilter = 'todos';
+let masterContacts = [];
+let masterProfiles = [];
+let userSources = [...SOURCES]; // live copy, overridden per user
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPA_URL = 'https://gzzpcorctunadifxweea.supabase.co';
@@ -782,9 +846,51 @@ async function loadContacts(){
   (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
 }
 
+async function loadUserGroups(){
+  const {data,error}=await sb.from('source_groups').select('*').order('sort_order',{ascending:true});
+  if(error||!data||data.length===0){ userSources=[...SOURCES]; return; }
+  // Merge: replace label/slots from DB, keep tip and grp from defaults
+  userSources = SOURCES.map(s=>{
+    const override = data.find(d=>d.key===s.key);
+    return override ? {...s, label:override.label, slots:override.slots} : {...s};
+  });
+}
+
+async function saveGroupOverride(key, label, slots){
+  const existing = await sb.from('source_groups').select('id').eq('user_id',currentUser.id).eq('key',key).single();
+  const payload = {user_id:currentUser.id, key, label, slots:parseInt(slots), grp: SOURCES.find(s=>s.key===key)?.grp||'', sort_order: SOURCES.findIndex(s=>s.key===key)};
+  if(existing.data){
+    await sb.from('source_groups').update({label,slots:parseInt(slots)}).eq('id',existing.data.id);
+  } else {
+    await sb.from('source_groups').insert(payload);
+  }
+  // Update live copy
+  const idx = userSources.findIndex(s=>s.key===key);
+  if(idx>=0){ userSources[idx].label=label; userSources[idx].slots=parseInt(slots); }
+}
+
+async function resetGroups(){
+  if(!confirm('Restaurar todos os grupos para o padrão? Seus nomes personalizados serão perdidos.')) return;
+  await sb.from('source_groups').delete().eq('user_id',currentUser.id);
+  userSources=[...SOURCES];
+  renderGrupos();
+  renderChips();
+  showToast('Grupos restaurados ✓');
+}
+
+// Master: load all contacts and profiles
+async function loadMasterData(){
+  const [{data:c},{data:p}] = await Promise.all([
+    sb.from('contacts').select('*').order('created_at',{ascending:true}),
+    sb.from('profiles').select('*')
+  ]);
+  masterContacts = (c||[]).map(dbToLocal);
+  masterProfiles = p||[];
+}
+
 function dbToLocal(c){
   return {
-    id:c.id, name:c.name, phone:c.phone||'', source:c.source||'',
+    id:c.id, user_id:c.user_id, name:c.name, phone:c.phone||'', source:c.source||'',
     renda:c.renda, idade:c.idade, prof:c.prof, civil:c.civil, abord:c.abord, ref:c.ref,
     status:c.status||'novo', lembrete:c.lembrete||'', obs:c.obs||''
   };
@@ -887,7 +993,7 @@ function scoreMeta(s){
 function allFilled(){ return Object.values(contacts).filter(c=>c&&c.name&&c.name.trim()); }
 function fmtDate(d){ if(!d) return ''; const p=d.split('-'); return `${p[2]}/${p[1]}`; }
 function today(){ return new Date().toISOString().split('T')[0]; }
-function srcLabel(key){ const s=SOURCES.find(x=>x.key===key); return s?s.label:key; }
+function srcLabel(key){ const s=userSources.find(x=>x.key===key)||SOURCES.find(x=>x.key===key); return s?s.label:key; }
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
@@ -896,12 +1002,14 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Dashboard', lista:'Minha Lista de 200', funil:'Funil de Vendas', lembretes:'Lembretes', exportar:'Exportar'};
+  const titles = {dashboard:'Dashboard', lista:'Minha Lista de 200', funil:'Funil de Vendas', lembretes:'Lembretes', exportar:'Exportar', grupos:'Meus Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard') renderDashboard();
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='funil') renderFunil();
   if(view==='lembretes') renderLembretes();
+  if(view==='grupos') renderGrupos();
+  if(view==='master') renderMaster();
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
@@ -919,12 +1027,11 @@ function renderDashboard(){
   document.getElementById('ds-prog-fill').style.width = pct+'%';
   if(pct>=100) document.getElementById('ds-prog-fill').classList.add('complete');
   document.getElementById('ds-prog-txt').textContent = `${all.length} de 200`;
-  // source mini
-  const sm = document.getElementById('ds-source-mini');
-  const grps = ['Família','Formação','Bairro','Comunidade','Lazer','Digital','Prestadores','Indicações','Profissional'];
-  sm.innerHTML = grps.map(g=>{
-    const keys = SOURCES.filter(s=>s.grp===g).map(s=>s.key);
-    const total = SOURCES.filter(s=>s.grp===g).reduce((a,s)=>a+s.slots,0);
+  const sm2 = document.getElementById('ds-source-mini');
+  const grps2 = [...new Set(userSources.map(s=>s.grp))];
+  sm2.innerHTML = grps2.map(g=>{
+    const keys = userSources.filter(s=>s.grp===g).map(s=>s.key);
+    const total = userSources.filter(s=>s.grp===g).reduce((a,s)=>a+s.slots,0);
     const done = all.filter(c=>keys.includes(c.source)).length;
     const p = Math.min(100,Math.round(done/total*100));
     return `<div style="font-size:11px;color:var(--gray-600)">
@@ -986,7 +1093,7 @@ function updateBadges(){
 function renderChips(){
   const el = document.getElementById('lista-chips');
   const grps = {};
-  SOURCES.forEach(s=>{
+  userSources.forEach(s=>{
     const cnt = allFilled().filter(c=>c.source===s.key).length;
     if(!grps[s.grp]) grps[s.grp]=[];
     grps[s.grp].push({...s,cnt});
@@ -998,14 +1105,14 @@ function renderChips(){
     });
   });
   el.innerHTML = html;
-  const src = SOURCES.find(s=>s.key===activeSrc);
+  const src = userSources.find(s=>s.key===activeSrc);
   document.getElementById('lista-tip').innerHTML = src?src.tip:'';
 }
 
 function setSrc(key){ activeSrc=key; renderChips(); renderGrid(); }
 
 function renderGrid(){
-  const src = SOURCES.find(s=>s.key===activeSrc);
+  const src = userSources.find(s=>s.key===activeSrc);
   const q = (document.getElementById('lista-search')||{value:''}).value.toLowerCase();
   const srcContacts = Object.values(contacts).filter(c=>c&&c.source===activeSrc).filter(c=>!q||c.name&&c.name.toLowerCase().includes(q));
   let html = '<div class="contact-grid">';
@@ -1039,7 +1146,91 @@ function renderGrid(){
   document.getElementById('lista-grid').innerHTML = html;
 }
 
-// ─── FUNIL / KANBAN ──────────────────────────────────────────────────────────
+// ─── GRUPOS ───────────────────────────────────────────────────────────────────
+function renderGrupos(){
+  const grps = {};
+  userSources.forEach(s=>{ if(!grps[s.grp]) grps[s.grp]=[]; grps[s.grp].push(s); });
+  const el = document.getElementById('grupos-list');
+  let html = '';
+  Object.entries(grps).forEach(([g,srcs])=>{
+    html+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--gray-400);padding:0.75rem 0 0.25rem">${g}</div>`;
+    srcs.forEach(s=>{
+      html+=`<div class="grupo-row" data-key="${s.key}">
+        <span class="grp-tag">${g}</span>
+        <input type="text" value="${s.label}" placeholder="Nome do grupo"
+          onchange="onGrupoChange('${s.key}',this)"
+          oninput="onGrupoChange('${s.key}',this)">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-500)">
+          <span>Slots:</span>
+          <input type="number" min="1" max="50" value="${s.slots}"
+            onchange="onGrupoChange('${s.key}',this)">
+        </div>
+        <span class="grp-save" id="saved-${s.key}">Salvo ✓</span>
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+let grupoSaveTimers = {};
+function onGrupoChange(key, el){
+  const row = el.closest('.grupo-row');
+  const label = row.querySelector('input[type=text]').value.trim();
+  const slots = row.querySelector('input[type=number]').value;
+  if(!label) return;
+  clearTimeout(grupoSaveTimers[key]);
+  grupoSaveTimers[key] = setTimeout(async()=>{
+    await saveGroupOverride(key, label, slots);
+    const badge = document.getElementById('saved-'+key);
+    badge.classList.add('show');
+    setTimeout(()=>badge.classList.remove('show'), 2000);
+    renderChips();
+  }, 800);
+}
+
+// ─── MASTER ───────────────────────────────────────────────────────────────────
+async function renderMaster(){
+  if(!isMaster) return;
+  const el = document.getElementById('master-tbody');
+  el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gray-400)">Carregando...</td></tr>';
+  await loadMasterData();
+
+  // Stats
+  const ms = document.getElementById('master-stats');
+  const totalUsers = [...new Set(masterContacts.map(c=>c.user_id))].length;
+  ms.innerHTML = `
+    <div class="stat-card accent-navy"><div class="stat-label">Corretores</div><div class="stat-value">${masterProfiles.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Total contatos</div><div class="stat-value">${masterContacts.length}</div></div>
+    <div class="stat-card accent-a"><div class="stat-label">Prioridade A</div><div class="stat-value">${masterContacts.filter(c=>calcScore(c)>=20).length}</div></div>
+    <div class="stat-card accent-b"><div class="stat-label">Fechados</div><div class="stat-value">${masterContacts.filter(c=>c.status==='fechado').length}</div></div>`;
+
+  // User filter chips
+  const chips = document.getElementById('master-user-chips');
+  chips.innerHTML = `<div class="chip ${masterFilter==='todos'?'active':''}" onclick="setMasterFilter('todos',this)">Todos</div>`
+    + masterProfiles.map(p=>`<div class="chip ${masterFilter===p.id?'active':''}" onclick="setMasterFilter('${p.id}',this)">${p.full_name||p.id.slice(0,8)}</div>`).join('');
+
+  const q = (document.getElementById('master-search')||{value:''}).value.toLowerCase();
+  let list = masterContacts.map(c=>({...c,score:calcScore(c)}));
+  if(masterFilter!=='todos') list=list.filter(c=>c.user_id===masterFilter);
+  if(q) list=list.filter(c=>c.name&&c.name.toLowerCase().includes(q));
+  list.sort((a,b)=>(b.score||0)-(a.score||0));
+
+  const profileMap = masterProfiles.reduce((m,p)=>{m[p.id]=p.full_name||p.id.slice(0,8);return m;},{});
+  if(!list.length){ el.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum contato encontrado</td></tr>'; return; }
+  el.innerHTML = list.map(c=>{
+    const sm=scoreMeta(c.score);
+    const st=STATUS_META[c.status||'novo'];
+    return `<tr>
+      <td style="font-size:12px;color:var(--gray-500)">${profileMap[c.user_id]||'—'}</td>
+      <td class="td-name">${c.name}</td>
+      <td class="td-muted" style="font-size:12px">${srcLabel(c.source)}</td>
+      <td class="td-muted">${c.phone||'—'}</td>
+      <td><span class="score-badge ${sm.cls}">${sm.l}${c.score!==null?' '+c.score:''}</span></td>
+      <td><span class="status-badge ${st.cls}">${st.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+function setMasterFilter(f,el){ masterFilter=f; document.querySelectorAll('#master-user-chips .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderMaster(); }
 const KANBAN_COLS = [
   {key:'novo',       label:'Novo',             cls:'col-novo'},
   {key:'abordado',   label:'Abordado',         cls:'col-abordado'},
@@ -1296,7 +1487,17 @@ async function initApp(user){
   document.getElementById('app-loading').style.display='flex';
   document.getElementById('app-loading').querySelector('p').textContent='Carregando seus contatos...';
 
-  await loadContacts();
+  await Promise.all([loadContacts(), loadUserGroups()]);
+
+  // Check master status
+  const {data:profile} = await sb.from('profiles').select('is_master').eq('id',user.id).single();
+  isMaster = profile?.is_master === true;
+  document.getElementById('nav-master').style.display = isMaster ? '' : 'none';
+  if(isMaster){
+    const badge = document.createElement('span');
+    badge.className='master-badge'; badge.textContent='Master';
+    document.getElementById('user-name-display').after(badge);
+  }
 
   document.getElementById('app-loading').style.display='none';
   document.getElementById('app-shell').style.display='flex';
