@@ -880,10 +880,13 @@ async function resetGroups(){
 
 // Master: load all contacts and profiles
 async function loadMasterData(){
-  const [{data:c},{data:p}] = await Promise.all([
+  const [{data:c, error:ce},{data:p, error:pe}] = await Promise.all([
     sb.from('contacts').select('*').order('created_at',{ascending:true}),
-    sb.from('profiles').select('*')
+    sb.from('profiles').select('id, full_name, is_master')
   ]);
+  if(ce){ console.error('Erro contacts:', ce); showToast('Erro ao carregar contatos: '+ce.message); return; }
+  if(pe){ console.error('Erro profiles:', pe); showToast('Erro ao carregar perfis: '+pe.message); return; }
+  console.log('Master contacts:', c?.length, 'profiles:', p?.length);
   masterContacts = (c||[]).map(dbToLocal);
   masterProfiles = p||[];
 }
@@ -1157,14 +1160,12 @@ function renderGrupos(){
     srcs.forEach(s=>{
       html+=`<div class="grupo-row" data-key="${s.key}">
         <span class="grp-tag">${g}</span>
-        <input type="text" value="${s.label}" placeholder="Nome do grupo"
-          onchange="onGrupoChange('${s.key}',this)"
-          oninput="onGrupoChange('${s.key}',this)">
+        <input type="text" id="glabel-${s.key}" value="${s.label}" placeholder="Nome do grupo">
         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-500)">
           <span>Slots:</span>
-          <input type="number" min="1" max="50" value="${s.slots}"
-            onchange="onGrupoChange('${s.key}',this)">
+          <input type="number" id="gslots-${s.key}" min="1" max="50" value="${s.slots}">
         </div>
+        <button class="btn btn-sm btn-primary" onclick="saveGrupo('${s.key}')">Salvar</button>
         <span class="grp-save" id="saved-${s.key}">Salvo ✓</span>
       </div>`;
     });
@@ -1172,32 +1173,65 @@ function renderGrupos(){
   el.innerHTML = html;
 }
 
-let grupoSaveTimers = {};
-function onGrupoChange(key, el){
-  const row = el.closest('.grupo-row');
-  const label = row.querySelector('input[type=text]').value.trim();
-  const slots = row.querySelector('input[type=number]').value;
-  if(!label) return;
-  clearTimeout(grupoSaveTimers[key]);
-  grupoSaveTimers[key] = setTimeout(async()=>{
-    await saveGroupOverride(key, label, slots);
-    const badge = document.getElementById('saved-'+key);
-    badge.classList.add('show');
-    setTimeout(()=>badge.classList.remove('show'), 2000);
-    renderChips();
-  }, 800);
+async function saveGrupo(key){
+  const labelEl = document.getElementById('glabel-'+key);
+  const slotsEl = document.getElementById('gslots-'+key);
+  const label = labelEl.value.trim();
+  const slots = parseInt(slotsEl.value)||15;
+  if(!label){ showToast('Nome não pode ser vazio'); return; }
+
+  const btn = document.querySelector(`[data-key="${key}"] .btn-primary`);
+  btn.textContent='...'; btn.disabled=true;
+
+  // Upsert by user_id + key
+  const {error} = await sb.from('source_groups').upsert({
+    user_id: currentUser.id,
+    key,
+    label,
+    slots,
+    grp: SOURCES.find(s=>s.key===key)?.grp||'',
+    sort_order: SOURCES.findIndex(s=>s.key===key),
+    tip: SOURCES.find(s=>s.key===key)?.tip||''
+  }, {onConflict: 'user_id,key'});
+
+  btn.textContent='Salvar'; btn.disabled=false;
+
+  if(error){
+    showToast('Erro: '+error.message);
+    console.error(error);
+    return;
+  }
+
+  // Update live copy
+  const idx = userSources.findIndex(s=>s.key===key);
+  if(idx>=0){ userSources[idx].label=label; userSources[idx].slots=slots; }
+
+  const badge = document.getElementById('saved-'+key);
+  badge.classList.add('show');
+  setTimeout(()=>badge.classList.remove('show'), 2000);
+  renderChips();
 }
 
 // ─── MASTER ───────────────────────────────────────────────────────────────────
 async function renderMaster(){
   if(!isMaster) return;
-  const el = document.getElementById('master-tbody');
-  el.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gray-400)">Carregando...</td></tr>';
+
+  // Show loading
+  document.getElementById('master-tbody').innerHTML =
+    '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gray-400)">Carregando dados...</td></tr>';
+  document.getElementById('master-stats').innerHTML = '';
+  document.getElementById('master-user-chips').innerHTML = '';
+
   await loadMasterData();
+
+  if(!masterContacts.length && !masterProfiles.length){
+    document.getElementById('master-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum dado encontrado. Verifique as policies no Supabase.</td></tr>';
+    return;
+  }
 
   // Stats
   const ms = document.getElementById('master-stats');
-  const totalUsers = [...new Set(masterContacts.map(c=>c.user_id))].length;
   ms.innerHTML = `
     <div class="stat-card accent-navy"><div class="stat-label">Corretores</div><div class="stat-value">${masterProfiles.length}</div></div>
     <div class="stat-card"><div class="stat-label">Total contatos</div><div class="stat-value">${masterContacts.length}</div></div>
@@ -1206,8 +1240,11 @@ async function renderMaster(){
 
   // User filter chips
   const chips = document.getElementById('master-user-chips');
-  chips.innerHTML = `<div class="chip ${masterFilter==='todos'?'active':''}" onclick="setMasterFilter('todos',this)">Todos</div>`
-    + masterProfiles.map(p=>`<div class="chip ${masterFilter===p.id?'active':''}" onclick="setMasterFilter('${p.id}',this)">${p.full_name||p.id.slice(0,8)}</div>`).join('');
+  chips.innerHTML = `<div class="chip ${masterFilter==='todos'?'active':''}" onclick="setMasterFilter('todos',this)">Todos (${masterContacts.length})</div>`
+    + masterProfiles.map(p=>{
+        const cnt = masterContacts.filter(c=>c.user_id===p.id).length;
+        return `<div class="chip ${masterFilter===p.id?'active':''}" onclick="setMasterFilter('${p.id}',this)">${p.full_name||p.id.slice(0,8)} (${cnt})</div>`;
+      }).join('');
 
   const q = (document.getElementById('master-search')||{value:''}).value.toLowerCase();
   let list = masterContacts.map(c=>({...c,score:calcScore(c)}));
@@ -1216,12 +1253,16 @@ async function renderMaster(){
   list.sort((a,b)=>(b.score||0)-(a.score||0));
 
   const profileMap = masterProfiles.reduce((m,p)=>{m[p.id]=p.full_name||p.id.slice(0,8);return m;},{});
-  if(!list.length){ el.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum contato encontrado</td></tr>'; return; }
+  const el = document.getElementById('master-tbody');
+  if(!list.length){
+    el.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum contato encontrado</td></tr>';
+    return;
+  }
   el.innerHTML = list.map(c=>{
     const sm=scoreMeta(c.score);
     const st=STATUS_META[c.status||'novo'];
     return `<tr>
-      <td style="font-size:12px;color:var(--gray-500)">${profileMap[c.user_id]||'—'}</td>
+      <td style="font-size:12px;color:var(--gray-500);font-weight:500">${profileMap[c.user_id]||'—'}</td>
       <td class="td-name">${c.name}</td>
       <td class="td-muted" style="font-size:12px">${srcLabel(c.source)}</td>
       <td class="td-muted">${c.phone||'—'}</td>
@@ -1490,13 +1531,17 @@ async function initApp(user){
   await Promise.all([loadContacts(), loadUserGroups()]);
 
   // Check master status
-  const {data:profile} = await sb.from('profiles').select('is_master').eq('id',user.id).single();
+  const {data:profile, error:perr} = await sb.from('profiles').select('is_master').eq('id',user.id).single();
+  console.log('Profile:', profile, 'Error:', perr);
   isMaster = profile?.is_master === true;
-  document.getElementById('nav-master').style.display = isMaster ? '' : 'none';
+  const navMaster = document.getElementById('nav-master');
+  navMaster.style.display = isMaster ? '' : 'none';
   if(isMaster){
+    // Remove any existing badge first
+    document.querySelectorAll('.master-badge').forEach(b=>b.remove());
     const badge = document.createElement('span');
     badge.className='master-badge'; badge.textContent='Master';
-    document.getElementById('user-name-display').after(badge);
+    document.getElementById('user-name-display').insertAdjacentElement('afterend', badge);
   }
 
   document.getElementById('app-loading').style.display='none';
@@ -1520,10 +1565,12 @@ async function initApp(user){
 // Login form keyboard support
 document.addEventListener('keydown', e=>{
   if(e.key!=='Enter') return;
-  if(document.getElementById('login-form').style.display!=='none'&&
-     document.getElementById('login-screen').style.display!=='none') doLogin();
-  if(document.getElementById('register-form').style.display!==''&&
-     document.getElementById('login-screen').style.display!=='none') doRegister();
+  if(document.getElementById('login-screen').style.display==='none') return;
+  if(document.getElementById('register-form').style.display==='none'){
+    doLogin();
+  } else {
+    doRegister();
+  }
 });
 
 // update score preview on field change
