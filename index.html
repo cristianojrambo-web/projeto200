@@ -651,28 +651,70 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <div id="imp-step2" style="display:none">
           <div class="stats-row" style="margin-bottom:1rem">
             <div class="stat-card accent-navy"><div class="stat-value" id="imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
-            <div class="stat-card accent-a"><div class="stat-value" id="imp-novos">0</div><div class="stat-label">Serão importados</div></div>
-            <div class="stat-card accent-b"><div class="stat-value" id="imp-dup">0</div><div class="stat-label">Duplicatas (pulados)</div></div>
+            <div class="stat-card accent-a"><div class="stat-value" id="imp-novos">0</div><div class="stat-label">Novos</div></div>
+            <div class="stat-card accent-b"><div class="stat-value" id="imp-dup">0</div><div class="stat-label">Já na base</div></div>
             <div class="stat-card"><div class="stat-value" id="imp-sem-nome">0</div><div class="stat-label">Sem nome (pulados)</div></div>
           </div>
 
           <div class="card" style="margin-bottom:1rem;overflow:hidden">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-              <div style="font-size:14px;font-weight:600">Prévia — primeiros 20 registros</div>
+              <div style="display:flex;gap:4px">
+                <button class="tab active" id="imp-tab-novos" onclick="setImpTab('novos')">
+                  Novos <span id="imp-tab-novos-cnt" style="background:var(--green-light);color:var(--green);font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px;margin-left:4px">0</span>
+                </button>
+                <button class="tab" id="imp-tab-existentes" onclick="setImpTab('existentes')">
+                  Já na base <span id="imp-tab-exist-cnt" style="background:var(--amber-light);color:var(--amber);font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px;margin-left:4px">0</span>
+                </button>
+              </div>
               <button class="btn btn-secondary btn-sm" onclick="resetImport()">← Trocar arquivo</button>
             </div>
-            <div style="overflow-x:auto">
-              <table class="list-table" id="imp-preview-table">
+
+            <!-- Barra de ações dos novos -->
+            <div id="imp-novos-actions" style="display:flex;gap:10px;align-items:center;margin-bottom:0.75rem">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="imp-select-all" checked onchange="toggleSelectAll(this.checked)"
+                  style="width:15px;height:15px">
+                <span>Selecionar todos</span>
+              </label>
+              <span style="font-size:13px;color:var(--gray-500)" id="imp-selected-count">0 selecionados</span>
+              <div class="search-bar" style="margin-left:auto;max-width:220px">
+                <span style="color:var(--gray-400);font-size:13px">🔍</span>
+                <input type="text" id="imp-search-novos" placeholder="Buscar..." oninput="renderImpTable()">
+              </div>
+            </div>
+
+            <!-- Tabela novos -->
+            <div id="imp-tab-novos-content" style="overflow-x:auto">
+              <table class="list-table">
                 <thead><tr>
-                  <th>Nome</th><th>Telefone</th><th>Email</th><th>CPF/CNPJ</th><th>Tipo</th><th>Profissão</th><th>Idade</th><th>Est. Civil</th><th>Score auto</th>
+                  <th style="width:32px"></th>
+                  <th>Nome</th><th>Telefone</th><th>Email</th><th>CPF/CNPJ</th>
+                  <th>Tipo</th><th>Profissão</th><th>Idade</th><th>Est. Civil</th><th>Score</th>
                 </tr></thead>
-                <tbody id="imp-preview-body"></tbody>
+                <tbody id="imp-novos-body"></tbody>
+              </table>
+            </div>
+
+            <!-- Tabela existentes -->
+            <div id="imp-tab-existentes-content" style="display:none;overflow-x:auto">
+              <div class="tip-box" style="margin-bottom:0.75rem">
+                Estes contatos já existem na base pelo CPF/CNPJ. Não serão reimportados.
+              </div>
+              <div class="search-bar" style="margin-bottom:0.75rem;max-width:220px">
+                <span style="color:var(--gray-400);font-size:13px">🔍</span>
+                <input type="text" id="imp-search-exist" placeholder="Buscar..." oninput="renderImpExistentes()">
+              </div>
+              <table class="list-table">
+                <thead><tr>
+                  <th>Nome</th><th>Telefone</th><th>CPF/CNPJ</th><th>Profissão</th><th>Idade</th>
+                </tr></thead>
+                <tbody id="imp-exist-body"></tbody>
               </table>
             </div>
           </div>
 
           <div style="display:flex;gap:10px;align-items:center">
-            <button class="btn btn-primary" onclick="executeImport()" id="imp-btn">⬆️ Importar para Clientes EGS Importados</button>
+            <button class="btn btn-primary" onclick="executeImport()" id="imp-btn">⬆️ Importar selecionados</button>
             <div id="imp-progress" style="font-size:13px;color:var(--gray-500);display:none"></div>
           </div>
         </div>
@@ -2355,8 +2397,10 @@ function ensureImportSource(){
   }
 }
 
-let impRows = [];       // parsed rows ready to import
-let impDupIds = new Set(); // CPF/CNPJs already in contacts
+let impRows = [];         // novos (não duplicatas)
+let impDupRows = [];      // já existentes na base
+let impSelected = new Set(); // índices selecionados em impRows
+let impTabCurrent = 'novos';
 
 // Map ERP profissão text → scoring value
 function mapProf(profText){
@@ -2370,10 +2414,8 @@ function mapProf(profText){
   if(socio.some(l=>p.includes(l))) return 5;
   if(clt.some(l=>p.includes(l))) return 3;
   if(p.includes('APOSENTADO')) return 1;
-  return 1; // autônomo/outros
+  return 1;
 }
-
-// Map ERP estado civil → scoring value
 function mapCivil(civilText){
   if(!civilText) return null;
   const c = civilText.toUpperCase();
@@ -2383,8 +2425,6 @@ function mapCivil(civilText){
   if(c.includes('VIÚVO')||c.includes('VIUVO')) return 0;
   return null;
 }
-
-// Map ERP idade → scoring value
 function mapIdade(age){
   const n = parseInt(age);
   if(isNaN(n)) return null;
@@ -2393,8 +2433,6 @@ function mapIdade(age){
   if(n < 55) return 4;
   return 1;
 }
-
-// Collect existing CPF/CNPJs from loaded contacts
 function collectExistingCpfs(){
   const set = new Set();
   Object.values(contacts).forEach(c=>{ if(c.cpf_cnpj) set.add(c.cpf_cnpj.replace(/\D/g,'')); });
@@ -2408,7 +2446,6 @@ function handleImpDrop(e){
   const file = e.dataTransfer.files[0];
   if(file) handleImpFile(file);
 }
-
 function handleImpFile(file){
   if(!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
@@ -2425,13 +2462,10 @@ function handleImpFile(file){
         rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       }
       processImpRows(rows);
-    } catch(err){
-      showToast('Erro ao ler arquivo: '+err.message);
-    }
+    } catch(err){ showToast('Erro ao ler arquivo: '+err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
-
 function parseCSV(text){
   const lines = text.split('\n').filter(l=>l.trim());
   if(!lines.length) return [];
@@ -2444,8 +2478,6 @@ function parseCSV(text){
     return obj;
   });
 }
-
-// Normalize column names — ERP may have slight variations
 function getCol(row, ...names){
   for(const n of names){
     if(row[n]!==undefined && row[n]!=='') return String(row[n]).trim();
@@ -2453,51 +2485,37 @@ function getCol(row, ...names){
   return '';
 }
 
+function parseRow(row){
+  const cpfRaw = getCol(row,'CPF/CNPJ','CPF','CNPJ','cpf_cnpj');
+  const profTxt = getCol(row,'Profissão','Profissao','PROFISSÃO','PROFISSAO','profissao');
+  const idadeRaw = getCol(row,'Idade','IDADE');
+  const civilRaw = getCol(row,'Estado Civil','EstadoCivil','ESTADO CIVIL');
+  const pessoa = getCol(row,'Pessoa','PESSOA','tipo_pessoa')||'F';
+  return {
+    name: getCol(row,'Cliente','Nome','CLIENTE','NOME'),
+    phone: getCol(row,'Telefone 1','Telefone1','TELEFONE 1','Tel 1') || getCol(row,'Telefone 2','Telefone2'),
+    email: getCol(row,'E-Mail','Email','E-mail','EMAIL') || getCol(row,'E-Mail 2','Email 2'),
+    cpf_cnpj: cpfRaw||null, _cpf: cpfRaw.replace(/\D/g,''),
+    prof_texto: profTxt||null, erp_codigo: getCol(row,'Código','Codigo','CÓDIGO','CODIGO','código')||null,
+    tipo_pessoa: pessoa.toUpperCase().includes('J')?'J':'F',
+    prof: mapProf(profTxt), civil: mapCivil(civilRaw), idade: mapIdade(idadeRaw),
+    renda: null, abord: null, ref: null,
+    _profTxt: profTxt, _idadeNum: parseInt(idadeRaw)||null, _civil: civilRaw,
+  };
+}
+
 function processImpRows(rows){
   const existingCpfs = collectExistingCpfs();
-  impDupIds = new Set();
-  impRows = [];
-  let semNome = 0;
-
+  impRows=[]; impDupRows=[]; impSelected=new Set();
+  let semNome=0;
   rows.forEach(row=>{
-    const name = getCol(row,'Cliente','Nome','CLIENTE','NOME');
-    if(!name){ semNome++; return; }
-
-    const cpfRaw = getCol(row,'CPF/CNPJ','CPF','CNPJ','cpf_cnpj');
-    const cpf = cpfRaw.replace(/\D/g,'');
-    if(cpf && existingCpfs.has(cpf)){ impDupIds.add(cpf); return; }
-
-    const phone = getCol(row,'Telefone 1','Telefone1','TELEFONE 1','Tel 1','tel1') ||
-                  getCol(row,'Telefone 2','Telefone2');
-    const email = getCol(row,'E-Mail','Email','E-mail','EMAIL','e-mail') ||
-                  getCol(row,'E-Mail 2','Email 2');
-    const profTxt = getCol(row,'Profissão','Profissao','PROFISSÃO','PROFISSAO','profissao');
-    const idadeRaw = getCol(row,'Idade','IDADE');
-    const civilRaw = getCol(row,'Estado Civil','EstadoCivil','ESTADO CIVIL');
-    const pessoa = getCol(row,'Pessoa','PESSOA','tipo_pessoa')||'F';
-    const codigo = getCol(row,'Código','Codigo','CÓDIGO','CODIGO','código');
-
-    impRows.push({
-      name, phone, email,
-      cpf_cnpj: cpfRaw||null,
-      prof_texto: profTxt||null,
-      erp_codigo: codigo||null,
-      tipo_pessoa: pessoa.toUpperCase().includes('J')?'J':'F',
-      importado: true,
-      source: IMP_SOURCE_KEY,
-      status: 'novo',
-      // scoring
-      prof: mapProf(profTxt),
-      civil: mapCivil(civilRaw),
-      idade: mapIdade(idadeRaw),
-      renda: null, abord: null, ref: null,
-      // display
-      _profTxt: profTxt,
-      _idadeNum: parseInt(idadeRaw)||null,
-      _civil: civilRaw,
-    });
+    const r = parseRow(row);
+    if(!r.name){ semNome++; return; }
+    if(r._cpf && existingCpfs.has(r._cpf)){ impDupRows.push(r); }
+    else { impRows.push(r); }
   });
-
+  // Select all by default
+  impRows.forEach((_,i)=>impSelected.add(i));
   showImpPreview(rows.length, semNome);
 }
 
@@ -2505,17 +2523,56 @@ function showImpPreview(total, semNome){
   document.getElementById('imp-step1').style.display='none';
   document.getElementById('imp-step2').style.display='';
   document.getElementById('imp-step3').style.display='none';
-
   document.getElementById('imp-total').textContent = total;
   document.getElementById('imp-novos').textContent = impRows.length;
-  document.getElementById('imp-dup').textContent = impDupIds.size;
+  document.getElementById('imp-dup').textContent = impDupRows.length;
   document.getElementById('imp-sem-nome').textContent = semNome;
+  document.getElementById('imp-tab-novos-cnt').textContent = impRows.length;
+  document.getElementById('imp-tab-exist-cnt').textContent = impDupRows.length;
+  setImpTab('novos');
+}
 
-  const tbody = document.getElementById('imp-preview-body');
-  tbody.innerHTML = impRows.slice(0,20).map(r=>{
-    const sc = calcScore(r);
-    const sm = scoreMeta(sc);
-    return `<tr>
+function setImpTab(tab){
+  impTabCurrent=tab;
+  document.getElementById('imp-tab-novos').classList.toggle('active',tab==='novos');
+  document.getElementById('imp-tab-existentes').classList.toggle('active',tab==='existentes');
+  document.getElementById('imp-tab-novos-content').style.display=tab==='novos'?'':'none';
+  document.getElementById('imp-tab-existentes-content').style.display=tab==='existentes'?'':'none';
+  document.getElementById('imp-novos-actions').style.display=tab==='novos'?'flex':'none';
+  if(tab==='novos') renderImpTable();
+  else renderImpExistentes();
+}
+
+function toggleSelectAll(checked){
+  impSelected = checked ? new Set(impRows.map((_,i)=>i)) : new Set();
+  renderImpTable();
+}
+
+function toggleImpRow(idx){
+  if(impSelected.has(idx)) impSelected.delete(idx);
+  else impSelected.add(idx);
+  updateImpCount();
+  // update just the checkbox
+  const cb = document.querySelector(`#imp-novos-body tr[data-idx="${idx}"] input[type=checkbox]`);
+  if(cb) cb.checked = impSelected.has(idx);
+  const tr = document.querySelector(`#imp-novos-body tr[data-idx="${idx}"]`);
+  if(tr) tr.style.opacity = impSelected.has(idx)?'1':'0.45';
+  document.getElementById('imp-select-all').checked = impSelected.size === impRows.length;
+}
+
+function updateImpCount(){
+  document.getElementById('imp-selected-count').textContent = `${impSelected.size} selecionados`;
+}
+
+function renderImpTable(){
+  const q = document.getElementById('imp-search-novos').value.toLowerCase();
+  const tbody = document.getElementById('imp-novos-body');
+  const list = impRows.map((r,i)=>({r,i})).filter(({r})=>!q||r.name.toLowerCase().includes(q));
+  tbody.innerHTML = list.map(({r,i})=>{
+    const sc=calcScore(r); const sm=scoreMeta(sc);
+    const checked=impSelected.has(i);
+    return `<tr data-idx="${i}" style="cursor:pointer;opacity:${checked?1:0.45}" onclick="toggleImpRow(${i})">
+      <td><input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleImpRow(${i})" style="width:15px;height:15px;cursor:pointer"></td>
       <td class="td-name">${r.name}${r.tipo_pessoa==='J'?' <span style="font-size:10px;background:#E8F4FD;color:#1565C0;padding:1px 5px;border-radius:3px">PJ</span>':''}</td>
       <td class="td-muted">${r.phone||'—'}</td>
       <td class="td-muted" style="font-size:11px">${r.email||'—'}</td>
@@ -2526,64 +2583,55 @@ function showImpPreview(total, semNome){
       <td class="td-muted" style="font-size:11px">${r._civil||'—'}</td>
       <td><span class="score-badge ${sm.cls}">${sm.l}${sc!==null?' '+sc:''}</span></td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:1rem;color:var(--gray-400)">Nenhum resultado</td></tr>';
+  updateImpCount();
+}
+
+function renderImpExistentes(){
+  const q = document.getElementById('imp-search-exist').value.toLowerCase();
+  const tbody = document.getElementById('imp-exist-body');
+  const list = impDupRows.filter(r=>!q||r.name.toLowerCase().includes(q));
+  tbody.innerHTML = list.map(r=>`<tr>
+    <td class="td-name">${r.name}${r.tipo_pessoa==='J'?' <span style="font-size:10px;background:#E8F4FD;color:#1565C0;padding:1px 5px;border-radius:3px">PJ</span>':''}</td>
+    <td class="td-muted">${r.phone||'—'}</td>
+    <td class="td-muted" style="font-size:11px">${r.cpf_cnpj||'—'}</td>
+    <td class="td-muted" style="font-size:11px">${r._profTxt||'—'}</td>
+    <td class="td-muted">${r._idadeNum||'—'}</td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--gray-400)">Nenhum resultado</td></tr>';
 }
 
 async function executeImport(){
-  if(!impRows.length){ showToast('Nenhum contato para importar'); return; }
+  const toImport = impRows.filter((_,i)=>impSelected.has(i));
+  if(!toImport.length){ showToast('Nenhum contato selecionado'); return; }
   ensureImportSource();
-
-  const btn = document.getElementById('imp-btn');
-  const prog = document.getElementById('imp-progress');
+  const btn=document.getElementById('imp-btn');
+  const prog=document.getElementById('imp-progress');
   btn.disabled=true; btn.textContent='Importando...';
   prog.style.display=''; prog.textContent='';
-
-  const BATCH = 50;
-  let imported = 0;
-  let errors = 0;
-
-  for(let i=0; i<impRows.length; i+=BATCH){
-    const batch = impRows.slice(i, i+BATCH).map(r=>({
-      user_id: currentUser.id,
-      name: r.name,
-      phone: r.phone||null,
-      email: r.email||null,
-      cpf_cnpj: r.cpf_cnpj||null,
-      prof_texto: r.prof_texto||null,
-      erp_codigo: r.erp_codigo||null,
-      tipo_pessoa: r.tipo_pessoa,
-      importado: true,
-      source: IMP_SOURCE_KEY,
-      status: 'novo',
-      prof: r.prof,
-      civil: r.civil,
-      idade: r.idade,
-      renda: null, abord: null, ref: null,
-      obs: r._profTxt ? `Profissão ERP: ${r._profTxt}` : null,
+  const BATCH=50; let imported=0; let errors=0;
+  for(let i=0;i<toImport.length;i+=BATCH){
+    const batch=toImport.slice(i,i+BATCH).map(r=>({
+      user_id:currentUser.id, name:r.name, phone:r.phone||null, email:r.email||null,
+      cpf_cnpj:r.cpf_cnpj||null, prof_texto:r.prof_texto||null, erp_codigo:r.erp_codigo||null,
+      tipo_pessoa:r.tipo_pessoa, importado:true, source:IMP_SOURCE_KEY, status:'novo',
+      prof:r.prof, civil:r.civil, idade:r.idade, renda:null, abord:null, ref:null,
+      obs:r._profTxt?`Profissão ERP: ${r._profTxt}`:null,
     }));
-
-    const {data, error} = await sb.from('contacts').insert(batch).select();
-    if(error){ errors += batch.length; console.error(error); }
-    else {
-      imported += (data||[]).length;
-      (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
-    }
-    prog.textContent = `${Math.min(i+BATCH, impRows.length)} / ${impRows.length} processados...`;
+    const {data,error}=await sb.from('contacts').insert(batch).select();
+    if(error){ errors+=batch.length; console.error(error); }
+    else{ imported+=(data||[]).length; (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); }); }
+    prog.textContent=`${Math.min(i+BATCH,toImport.length)} / ${toImport.length} processados...`;
   }
-
-  btn.disabled=false; btn.textContent='⬆️ Importar para Clientes EGS Importados';
+  btn.disabled=false; btn.textContent='⬆️ Importar selecionados';
   prog.style.display='none';
-
   document.getElementById('imp-step2').style.display='none';
   document.getElementById('imp-step3').style.display='';
-  document.getElementById('imp-done-msg').textContent = `${imported} contatos importados com sucesso!`;
-  document.getElementById('imp-done-sub').textContent =
-    errors ? `${errors} erros — verifique o console para detalhes.`
-    : 'Todos os contatos estão no grupo "Clientes EGS Importados". Você pode classificá-los a qualquer momento.';
-
-  updateBadges();
-  renderDashboard();
-  impRows = [];
+  document.getElementById('imp-done-msg').textContent=`${imported} contatos importados com sucesso!`;
+  document.getElementById('imp-done-sub').textContent=errors
+    ?`${errors} erros — verifique o console para detalhes.`
+    :'Todos os contatos estão no grupo "Clientes EGS Importados". Você pode classificá-los a qualquer momento.';
+  updateBadges(); renderDashboard();
+  impRows=[]; impDupRows=[]; impSelected=new Set();
 }
 
 function resetImport(){
@@ -2591,7 +2639,7 @@ function resetImport(){
   document.getElementById('imp-step2').style.display='none';
   document.getElementById('imp-step3').style.display='none';
   document.getElementById('imp-file-input').value='';
-  impRows=[];
+  impRows=[]; impDupRows=[]; impSelected=new Set();
 }
 
 document.getElementById('modal-overlay').addEventListener('change', function(e){
