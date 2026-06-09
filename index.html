@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --navy: #1B3A6B;
@@ -387,6 +388,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <div class="nav-item" onclick="goTo('exportar',this)">
         <span class="icon">⬇️</span> Exportar
       </div>
+      <div class="nav-item" id="nav-importar" style="display:none" onclick="goTo('importar',this)">
+        <span class="icon">⬆️</span> Importar
+      </div>
       <div class="nav-item" id="nav-master" style="display:none" onclick="goTo('master',this)">
         <span class="icon">👑</span> Visão Master
       </div>
@@ -601,7 +605,91 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         </div>
       </div>
 
-      <!-- GRUPOS -->
+      <!-- IMPORTAR -->
+      <div id="view-importar" class="view">
+        <div class="page-header">
+          <h1>Importar Clientes</h1>
+          <p>Importe sua base do ERP para o grupo <strong>Clientes EGS Importados</strong></p>
+        </div>
+
+        <!-- STEP 1: Upload -->
+        <div id="imp-step1">
+          <div class="card" style="margin-bottom:1rem">
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:0.75rem">📋 Colunas esperadas no arquivo</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem">
+              <span class="score-badge score-a">Cliente</span>
+              <span class="score-badge score-a">Telefone 1</span>
+              <span class="score-badge score-a">E-Mail</span>
+              <span class="score-badge score-a">CPF/CNPJ</span>
+              <span class="score-badge score-a">Profissão</span>
+              <span class="score-badge score-a">Idade</span>
+              <span class="score-badge score-a">Estado Civil</span>
+              <span class="score-badge score-a">Pessoa</span>
+              <span class="score-badge score-none">Código</span>
+              <span class="score-badge score-none">Telefone 2</span>
+              <span class="score-badge score-none">E-Mail 2</span>
+              <span style="font-size:12px;color:var(--gray-400);align-self:center">— demais colunas ignoradas</span>
+            </div>
+            <div class="tip-box" style="margin:0">
+              O arquivo pode ter mais colunas — o sistema usa apenas as listadas em verde. Contatos sem nome são ignorados. Duplicatas por CPF/CNPJ são puladas automaticamente.
+            </div>
+          </div>
+
+          <div class="card" id="imp-dropzone" style="border:2px dashed var(--gray-300);text-align:center;padding:3rem;cursor:pointer;transition:all 0.2s"
+            onclick="document.getElementById('imp-file-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='var(--navy-light)'"
+            ondragleave="this.style.borderColor='var(--gray-300)';this.style.background=''"
+            ondrop="handleImpDrop(event)">
+            <div style="font-size:48px;margin-bottom:1rem">📂</div>
+            <div style="font-size:15px;font-weight:500;color:var(--gray-700);margin-bottom:6px">Clique ou arraste o arquivo aqui</div>
+            <div style="font-size:13px;color:var(--gray-400)">Formatos aceitos: .xlsx, .xls, .csv</div>
+            <input type="file" id="imp-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImpFile(this.files[0])">
+          </div>
+        </div>
+
+        <!-- STEP 2: Preview -->
+        <div id="imp-step2" style="display:none">
+          <div class="stats-row" style="margin-bottom:1rem">
+            <div class="stat-card accent-navy"><div class="stat-value" id="imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
+            <div class="stat-card accent-a"><div class="stat-value" id="imp-novos">0</div><div class="stat-label">Serão importados</div></div>
+            <div class="stat-card accent-b"><div class="stat-value" id="imp-dup">0</div><div class="stat-label">Duplicatas (pulados)</div></div>
+            <div class="stat-card"><div class="stat-value" id="imp-sem-nome">0</div><div class="stat-label">Sem nome (pulados)</div></div>
+          </div>
+
+          <div class="card" style="margin-bottom:1rem;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+              <div style="font-size:14px;font-weight:600">Prévia — primeiros 20 registros</div>
+              <button class="btn btn-secondary btn-sm" onclick="resetImport()">← Trocar arquivo</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="list-table" id="imp-preview-table">
+                <thead><tr>
+                  <th>Nome</th><th>Telefone</th><th>Email</th><th>CPF/CNPJ</th><th>Tipo</th><th>Profissão</th><th>Idade</th><th>Est. Civil</th><th>Score auto</th>
+                </tr></thead>
+                <tbody id="imp-preview-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" onclick="executeImport()" id="imp-btn">⬆️ Importar para Clientes EGS Importados</button>
+            <div id="imp-progress" style="font-size:13px;color:var(--gray-500);display:none"></div>
+          </div>
+        </div>
+
+        <!-- STEP 3: Done -->
+        <div id="imp-step3" style="display:none">
+          <div class="card" style="text-align:center;padding:3rem">
+            <div style="font-size:48px;margin-bottom:1rem">✅</div>
+            <div style="font-size:18px;font-weight:600;margin-bottom:8px" id="imp-done-msg">Importação concluída!</div>
+            <div style="font-size:13px;color:var(--gray-500);margin-bottom:1.5rem" id="imp-done-sub"></div>
+            <div style="display:flex;gap:10px;justify-content:center">
+              <button class="btn btn-secondary" onclick="resetImport()">Importar outro arquivo</button>
+              <button class="btn btn-primary" onclick="goTo('lista', document.querySelector('[onclick*=lista]'))">Ver Contatos</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="view-grupos" class="view">
         <div class="page-header">
           <h1>Meus Grupos de Contato</h1>
@@ -618,10 +706,29 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <div id="view-master" class="view">
         <div class="page-header">
           <h1>Visão Master</h1>
-          <p>Todos os corretores e suas listas</p>
+          <p>Todos os corretores, suas listas e permissões</p>
         </div>
         <div class="stats-row" id="master-stats"></div>
-        <div class="action-bar" style="margin-top:1rem">
+
+        <!-- PERMISSÕES -->
+        <div class="card" style="margin-top:1rem;margin-bottom:1.5rem">
+          <div style="font-size:14px;font-weight:600;margin-bottom:1rem;color:var(--gray-800)">🔑 Permissões dos corretores</div>
+          <div style="overflow-x:auto">
+            <table class="list-table" id="perms-table">
+              <thead><tr>
+                <th>Corretor</th>
+                <th>E-mail</th>
+                <th style="text-align:center">Importar EGS</th>
+                <th style="text-align:center">Importar Teleport</th>
+                <th></th>
+              </tr></thead>
+              <tbody id="perms-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- CONTATOS -->
+        <div class="action-bar">
           <div class="chips-row" id="master-user-chips" style="margin:0"></div>
           <div class="search-bar">
             <span style="color:var(--gray-400);font-size:13px">🔍</span>
@@ -630,16 +737,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         </div>
         <div class="card" style="overflow:hidden;margin-top:1rem">
           <table class="list-table">
-            <thead>
-              <tr>
-                <th>Corretor</th>
-                <th>Nome</th>
-                <th>Grupo</th>
-                <th>Telefone</th>
-                <th>Prioridade</th>
-                <th>Status</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Corretor</th><th>Nome</th><th>Grupo</th>
+              <th>Telefone</th><th>Prioridade</th><th>Status</th>
+            </tr></thead>
             <tbody id="master-tbody"></tbody>
           </table>
         </div>
@@ -953,6 +1054,8 @@ let lembreteFilter = 'todos';
 let editId = null;
 let currentUser = null;
 let isMaster = false;
+let canImportEgs = false;
+let canImportTeleport = false;
 let masterFilter = 'todos';
 let masterContacts = [];
 let masterProfiles = [];
@@ -1071,6 +1174,8 @@ async function loadMasterData(){
 function dbToLocal(c){
   return {
     id:c.id, user_id:c.user_id, name:c.name, phone:c.phone||'', source:c.source||'',
+    email:c.email||'', cpf_cnpj:c.cpf_cnpj||'', prof_texto:c.prof_texto||'',
+    erp_codigo:c.erp_codigo||'', tipo_pessoa:c.tipo_pessoa||'F', importado:c.importado||false,
     renda:c.renda, idade:c.idade, prof:c.prof, civil:c.civil, abord:c.abord, ref:c.ref,
     status:c.status||'novo', lembrete:c.lembrete||'', obs:c.obs||''
   };
@@ -1182,7 +1287,7 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', grupos:'Grupos', master:'Visão Master'};
+  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard') renderDashboard();
   if(view==='lista'){ renderChips(); renderGrid(); }
@@ -1393,7 +1498,6 @@ async function saveGrupo(key){
 async function renderMaster(){
   if(!isMaster) return;
 
-  // Show loading
   document.getElementById('master-tbody').innerHTML =
     '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gray-400)">Carregando dados...</td></tr>';
   document.getElementById('master-stats').innerHTML = '';
@@ -1401,21 +1505,40 @@ async function renderMaster(){
 
   await loadMasterData();
 
-  if(!masterContacts.length && !masterProfiles.length){
-    document.getElementById('master-tbody').innerHTML =
-      '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400)">Nenhum dado encontrado. Verifique as policies no Supabase.</td></tr>';
-    return;
-  }
+  // ── PERMISSOES ──
+  const {data:allProfiles} = await sb.from('profiles')
+    .select('id, full_name, is_master, can_import_egs, can_import_teleport')
+    .order('full_name');
 
-  // Stats
+  const permsBody = document.getElementById('perms-tbody');
+  const nonMaster = (allProfiles||[]).filter(p=>!p.is_master);
+  permsBody.innerHTML = nonMaster.length ? nonMaster.map(p=>`
+    <tr>
+      <td class="td-name">${p.full_name||'—'}</td>
+      <td class="td-muted" style="font-size:12px">—</td>
+      <td style="text-align:center">
+        <input type="checkbox" ${p.can_import_egs?'checked':''}
+          onchange="togglePerm('${p.id}','can_import_egs',this.checked)"
+          style="width:16px;height:16px;cursor:pointer">
+      </td>
+      <td style="text-align:center">
+        <input type="checkbox" ${p.can_import_teleport?'checked':''}
+          onchange="togglePerm('${p.id}','can_import_teleport',this.checked)"
+          style="width:16px;height:16px;cursor:pointer">
+      </td>
+      <td></td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--gray-400)">Nenhum corretor cadastrado</td></tr>';
+
+  // ── STATS ──
   const ms = document.getElementById('master-stats');
   ms.innerHTML = `
-    <div class="stat-card accent-navy"><div class="stat-label">Corretores</div><div class="stat-value">${masterProfiles.length}</div></div>
+    <div class="stat-card accent-navy"><div class="stat-label">Corretores</div><div class="stat-value">${nonMaster.length}</div></div>
     <div class="stat-card"><div class="stat-label">Total contatos</div><div class="stat-value">${masterContacts.length}</div></div>
     <div class="stat-card accent-a"><div class="stat-label">Prioridade A</div><div class="stat-value">${masterContacts.filter(c=>calcScore(c)>=20).length}</div></div>
     <div class="stat-card accent-b"><div class="stat-label">Fechados</div><div class="stat-value">${masterContacts.filter(c=>c.status==='fechado').length}</div></div>`;
 
-  // User filter chips
+  // ── FILTROS ──
   const chips = document.getElementById('master-user-chips');
   chips.innerHTML = `<div class="chip ${masterFilter==='todos'?'active':''}" onclick="setMasterFilter('todos',this)">Todos (${masterContacts.length})</div>`
     + masterProfiles.map(p=>{
@@ -1423,6 +1546,7 @@ async function renderMaster(){
         return `<div class="chip ${masterFilter===p.id?'active':''}" onclick="setMasterFilter('${p.id}',this)">${p.full_name||p.id.slice(0,8)} (${cnt})</div>`;
       }).join('');
 
+  // ── TABELA ──
   const q = (document.getElementById('master-search')||{value:''}).value.toLowerCase();
   let list = masterContacts.map(c=>({...c,score:calcScore(c)}));
   if(masterFilter!=='todos') list=list.filter(c=>c.user_id===masterFilter);
@@ -1448,6 +1572,13 @@ async function renderMaster(){
     </tr>`;
   }).join('');
 }
+
+async function togglePerm(profileId, field, value){
+  const {error} = await sb.from('profiles').update({[field]:value}).eq('id',profileId);
+  if(error){ showToast('Erro ao salvar: '+error.message); return; }
+  showToast(value ? 'Permissão concedida ✓' : 'Permissão removida');
+}
+
 function setMasterFilter(f,el){ masterFilter=f; document.querySelectorAll('#master-user-chips .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderMaster(); }
 const KANBAN_COLS = [
   {key:'novo',       label:'Novo',             cls:'col-novo'},
@@ -1705,16 +1836,25 @@ async function initApp(user){
   document.getElementById('app-loading').style.display='flex';
   document.getElementById('app-loading').querySelector('p').textContent='Carregando seus contatos...';
 
+  // Load profile + permissions
+  const {data:profile} = await sb.from('profiles')
+    .select('is_master, can_import_egs, can_import_teleport')
+    .eq('id', user.id).single();
+
+  isMaster         = profile?.is_master === true;
+  canImportEgs     = isMaster || profile?.can_import_egs === true;
+  canImportTeleport= isMaster || profile?.can_import_teleport === true;
+
   await Promise.all([loadContacts(), loadUserGroups()]);
 
-  // Check master status
-  const {data:profile, error:perr} = await sb.from('profiles').select('is_master').eq('id',user.id).single();
-  console.log('Profile:', profile, 'Error:', perr);
-  isMaster = profile?.is_master === true;
-  const navMaster = document.getElementById('nav-master');
-  navMaster.style.display = isMaster ? '' : 'none';
+  // Only show EGS imported group to authorized users
+  if(canImportEgs) ensureImportSource();
+
+  // Nav visibility
+  document.getElementById('nav-master').style.display  = isMaster ? '' : 'none';
+  document.getElementById('nav-importar').style.display = isMaster ? '' : 'none';
+
   if(isMaster){
-    // Remove any existing badge first
     document.querySelectorAll('.master-badge').forEach(b=>b.remove());
     const badge = document.createElement('span');
     badge.className='master-badge'; badge.textContent='Master';
@@ -2197,7 +2337,263 @@ async function saveTemplate(){
   showToast('Template salvo ✓');
 }
 
-// update score preview on field change
+// ─── IMPORTAR ────────────────────────────────────────────────────────────────
+const IMP_SOURCE_KEY = 'clientes_egs_importados';
+const IMP_SOURCE = {
+  grp:'Importados', key: IMP_SOURCE_KEY,
+  label:'Clientes EGS Importados', slots:9999,
+  tip:'<strong>Clientes EGS Importados</strong> — Base importada do ERP. Classifique os contatos conforme necessário.'
+};
+
+// Ensure import source exists in userSources
+function ensureImportSource(){
+  if(!userSources.find(s=>s.key===IMP_SOURCE_KEY)){
+    userSources.push({...IMP_SOURCE});
+  }
+  if(!SOURCES.find(s=>s.key===IMP_SOURCE_KEY)){
+    SOURCES.push({...IMP_SOURCE});
+  }
+}
+
+let impRows = [];       // parsed rows ready to import
+let impDupIds = new Set(); // CPF/CNPJs already in contacts
+
+// Map ERP profissão text → scoring value
+function mapProf(profText){
+  if(!profText) return null;
+  const p = profText.toUpperCase();
+  const liberal = ['MÉDICO','DENTISTA','ADVOGADO','ENGENHEIRO','ARQUITETO','PSICÓLOGO',
+    'FISIOTERAPEUTA','VETERINÁRIO','CONTADOR','FARMACÊUTICO','NUTRICIONISTA','PROFESSOR'];
+  const clt = ['BANCÁRIO','SERVIDOR','FUNCIONÁRIO','FUNCIONARIO','FUNCIONÁRIA'];
+  const socio = ['EMPRESÁRIO','EMPRESARIO','PRODUTOR RURAL','PROPRIETÁRIO'];
+  if(liberal.some(l=>p.includes(l))) return 5;
+  if(socio.some(l=>p.includes(l))) return 5;
+  if(clt.some(l=>p.includes(l))) return 3;
+  if(p.includes('APOSENTADO')) return 1;
+  return 1; // autônomo/outros
+}
+
+// Map ERP estado civil → scoring value
+function mapCivil(civilText){
+  if(!civilText) return null;
+  const c = civilText.toUpperCase();
+  if(c.includes('CASADO')) return 4;
+  if(c.includes('SOLTEIRO')) return 1;
+  if(c.includes('DIVORCIADO')) return 1;
+  if(c.includes('VIÚVO')||c.includes('VIUVO')) return 0;
+  return null;
+}
+
+// Map ERP idade → scoring value
+function mapIdade(age){
+  const n = parseInt(age);
+  if(isNaN(n)) return null;
+  if(n < 25) return 0;
+  if(n < 35) return 2;
+  if(n < 55) return 4;
+  return 1;
+}
+
+// Collect existing CPF/CNPJs from loaded contacts
+function collectExistingCpfs(){
+  const set = new Set();
+  Object.values(contacts).forEach(c=>{ if(c.cpf_cnpj) set.add(c.cpf_cnpj.replace(/\D/g,'')); });
+  return set;
+}
+
+function handleImpDrop(e){
+  e.preventDefault();
+  document.getElementById('imp-dropzone').style.borderColor='var(--gray-300)';
+  document.getElementById('imp-dropzone').style.background='';
+  const file = e.dataTransfer.files[0];
+  if(file) handleImpFile(file);
+}
+
+function handleImpFile(file){
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let rows = [];
+      if(ext==='csv'){
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+        rows = parseCSV(text);
+      } else {
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      }
+      processImpRows(rows);
+    } catch(err){
+      showToast('Erro ao ler arquivo: '+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseCSV(text){
+  const lines = text.split('\n').filter(l=>l.trim());
+  if(!lines.length) return [];
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  const headers = lines[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line=>{
+    const vals = line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''));
+    const obj={};
+    headers.forEach((h,i)=>{ obj[h]=vals[i]||''; });
+    return obj;
+  });
+}
+
+// Normalize column names — ERP may have slight variations
+function getCol(row, ...names){
+  for(const n of names){
+    if(row[n]!==undefined && row[n]!=='') return String(row[n]).trim();
+  }
+  return '';
+}
+
+function processImpRows(rows){
+  const existingCpfs = collectExistingCpfs();
+  impDupIds = new Set();
+  impRows = [];
+  let semNome = 0;
+
+  rows.forEach(row=>{
+    const name = getCol(row,'Cliente','Nome','CLIENTE','NOME');
+    if(!name){ semNome++; return; }
+
+    const cpfRaw = getCol(row,'CPF/CNPJ','CPF','CNPJ','cpf_cnpj');
+    const cpf = cpfRaw.replace(/\D/g,'');
+    if(cpf && existingCpfs.has(cpf)){ impDupIds.add(cpf); return; }
+
+    const phone = getCol(row,'Telefone 1','Telefone1','TELEFONE 1','Tel 1','tel1') ||
+                  getCol(row,'Telefone 2','Telefone2');
+    const email = getCol(row,'E-Mail','Email','E-mail','EMAIL','e-mail') ||
+                  getCol(row,'E-Mail 2','Email 2');
+    const profTxt = getCol(row,'Profissão','Profissao','PROFISSÃO','PROFISSAO','profissao');
+    const idadeRaw = getCol(row,'Idade','IDADE');
+    const civilRaw = getCol(row,'Estado Civil','EstadoCivil','ESTADO CIVIL');
+    const pessoa = getCol(row,'Pessoa','PESSOA','tipo_pessoa')||'F';
+    const codigo = getCol(row,'Código','Codigo','CÓDIGO','CODIGO','código');
+
+    impRows.push({
+      name, phone, email,
+      cpf_cnpj: cpfRaw||null,
+      prof_texto: profTxt||null,
+      erp_codigo: codigo||null,
+      tipo_pessoa: pessoa.toUpperCase().includes('J')?'J':'F',
+      importado: true,
+      source: IMP_SOURCE_KEY,
+      status: 'novo',
+      // scoring
+      prof: mapProf(profTxt),
+      civil: mapCivil(civilRaw),
+      idade: mapIdade(idadeRaw),
+      renda: null, abord: null, ref: null,
+      // display
+      _profTxt: profTxt,
+      _idadeNum: parseInt(idadeRaw)||null,
+      _civil: civilRaw,
+    });
+  });
+
+  showImpPreview(rows.length, semNome);
+}
+
+function showImpPreview(total, semNome){
+  document.getElementById('imp-step1').style.display='none';
+  document.getElementById('imp-step2').style.display='';
+  document.getElementById('imp-step3').style.display='none';
+
+  document.getElementById('imp-total').textContent = total;
+  document.getElementById('imp-novos').textContent = impRows.length;
+  document.getElementById('imp-dup').textContent = impDupIds.size;
+  document.getElementById('imp-sem-nome').textContent = semNome;
+
+  const tbody = document.getElementById('imp-preview-body');
+  tbody.innerHTML = impRows.slice(0,20).map(r=>{
+    const sc = calcScore(r);
+    const sm = scoreMeta(sc);
+    return `<tr>
+      <td class="td-name">${r.name}${r.tipo_pessoa==='J'?' <span style="font-size:10px;background:#E8F4FD;color:#1565C0;padding:1px 5px;border-radius:3px">PJ</span>':''}</td>
+      <td class="td-muted">${r.phone||'—'}</td>
+      <td class="td-muted" style="font-size:11px">${r.email||'—'}</td>
+      <td class="td-muted" style="font-size:11px">${r.cpf_cnpj||'—'}</td>
+      <td class="td-muted">${r.tipo_pessoa==='J'?'PJ':'PF'}</td>
+      <td class="td-muted" style="font-size:11px">${r._profTxt||'—'}</td>
+      <td class="td-muted">${r._idadeNum||'—'}</td>
+      <td class="td-muted" style="font-size:11px">${r._civil||'—'}</td>
+      <td><span class="score-badge ${sm.cls}">${sm.l}${sc!==null?' '+sc:''}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function executeImport(){
+  if(!impRows.length){ showToast('Nenhum contato para importar'); return; }
+  ensureImportSource();
+
+  const btn = document.getElementById('imp-btn');
+  const prog = document.getElementById('imp-progress');
+  btn.disabled=true; btn.textContent='Importando...';
+  prog.style.display=''; prog.textContent='';
+
+  const BATCH = 50;
+  let imported = 0;
+  let errors = 0;
+
+  for(let i=0; i<impRows.length; i+=BATCH){
+    const batch = impRows.slice(i, i+BATCH).map(r=>({
+      user_id: currentUser.id,
+      name: r.name,
+      phone: r.phone||null,
+      email: r.email||null,
+      cpf_cnpj: r.cpf_cnpj||null,
+      prof_texto: r.prof_texto||null,
+      erp_codigo: r.erp_codigo||null,
+      tipo_pessoa: r.tipo_pessoa,
+      importado: true,
+      source: IMP_SOURCE_KEY,
+      status: 'novo',
+      prof: r.prof,
+      civil: r.civil,
+      idade: r.idade,
+      renda: null, abord: null, ref: null,
+      obs: r._profTxt ? `Profissão ERP: ${r._profTxt}` : null,
+    }));
+
+    const {data, error} = await sb.from('contacts').insert(batch).select();
+    if(error){ errors += batch.length; console.error(error); }
+    else {
+      imported += (data||[]).length;
+      (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+    }
+    prog.textContent = `${Math.min(i+BATCH, impRows.length)} / ${impRows.length} processados...`;
+  }
+
+  btn.disabled=false; btn.textContent='⬆️ Importar para Clientes EGS Importados';
+  prog.style.display='none';
+
+  document.getElementById('imp-step2').style.display='none';
+  document.getElementById('imp-step3').style.display='';
+  document.getElementById('imp-done-msg').textContent = `${imported} contatos importados com sucesso!`;
+  document.getElementById('imp-done-sub').textContent =
+    errors ? `${errors} erros — verifique o console para detalhes.`
+    : 'Todos os contatos estão no grupo "Clientes EGS Importados". Você pode classificá-los a qualquer momento.';
+
+  updateBadges();
+  renderDashboard();
+  impRows = [];
+}
+
+function resetImport(){
+  document.getElementById('imp-step1').style.display='';
+  document.getElementById('imp-step2').style.display='none';
+  document.getElementById('imp-step3').style.display='none';
+  document.getElementById('imp-file-input').value='';
+  impRows=[];
+}
+
 document.getElementById('modal-overlay').addEventListener('change', function(e){
   if(e.target.matches('select,input')) updateScorePreview();
 });
