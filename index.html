@@ -272,6 +272,15 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .col-fechado .kanban-col-header { border-bottom: 2px solid var(--green); }
 .col-descartado .kanban-col-header { border-bottom: 2px solid var(--gray-300); }
 
+/* CAMP CARDS */
+.camp-card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-md);padding:1.25rem;cursor:pointer;transition:all 0.15s;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.camp-card:hover{box-shadow:var(--shadow-md);border-color:var(--gray-300)}
+.camp-card-new{align-items:center;justify-content:center;border-style:dashed;color:var(--gray-400);background:var(--gray-50)}
+.camp-card-new:hover{color:var(--navy);border-color:var(--navy);background:var(--navy-light)}
+.camp-card-title{font-size:15px;font-weight:600;color:var(--gray-900)}
+.camp-card-desc{font-size:13px;color:var(--gray-500);flex:1}
+.camp-card-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}
+
 /* RESPONSIVE */
 @media (max-width: 900px) {
   .sidebar { width: 200px; }
@@ -358,21 +367,22 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <nav class="sidebar-nav">
       <div class="nav-section">Principal</div>
       <div class="nav-item active" onclick="goTo('dashboard',this)">
-        <span class="icon">📊</span> Dashboard
+        <span class="icon">📊</span> Visão Geral
       </div>
       <div class="nav-item" onclick="goTo('lista',this)">
-        <span class="icon">📋</span> Minha Lista
+        <span class="icon">👥</span> Contatos
       </div>
-      <div class="nav-item" onclick="goTo('funil',this)">
-        <span class="icon">🎯</span> Funil de Vendas
+      <div class="nav-item" onclick="goTo('campanhas',this)">
+        <span class="icon">🚀</span> Campanhas
+        <span id="camp-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
       <div class="nav-item" onclick="goTo('lembretes',this)">
-        <span class="icon">🔔</span> Lembretes
+        <span class="icon">📅</span> Agenda
         <span id="lembrete-badge" style="margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
       <div class="nav-section" style="margin-top:0.75rem">Ferramentas</div>
       <div class="nav-item" onclick="goTo('grupos',this)">
-        <span class="icon">🗂️</span> Meus Grupos
+        <span class="icon">🗂️</span> Grupos
       </div>
       <div class="nav-item" onclick="goTo('exportar',this)">
         <span class="icon">⬇️</span> Exportar
@@ -411,8 +421,8 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <!-- DASHBOARD -->
       <div id="view-dashboard" class="view active">
         <div class="page-header">
-          <h1>Dashboard</h1>
-          <p>Visão geral do seu Projeto 200</p>
+          <h1>Visão Geral</h1>
+          <p>Resumo da sua atividade comercial</p>
         </div>
         <div class="stats-row">
           <div class="stat-card accent-navy">
@@ -463,8 +473,8 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <!-- LISTA -->
       <div id="view-lista" class="view">
         <div class="page-header">
-          <h1>Minha Lista de 200</h1>
-          <p>Organize seus contatos por grupo de origem</p>
+          <h1>Contatos</h1>
+          <p>Sua lista de prospecção organizada por grupo de origem</p>
         </div>
         <div class="chips-row" id="lista-chips"></div>
         <div class="tip-box" id="lista-tip"></div>
@@ -480,28 +490,70 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <div id="lista-grid"></div>
       </div>
 
-      <!-- FUNIL -->
-      <div id="view-funil" class="view">
-        <div class="page-header">
-          <h1>Funil de Vendas</h1>
-          <p>Arraste os cards entre as colunas para mover um contato de etapa</p>
-        </div>
-        <div class="funnel-row" id="funil-row"></div>
-        <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
-          <div class="search-bar">
-            <span style="color:var(--gray-400);font-size:13px">🔍</span>
-            <input type="text" id="funil-search" placeholder="Filtrar contatos..." oninput="renderKanban()">
+      <!-- CAMPANHAS -->
+      <div id="view-campanhas" class="view">
+        <div id="camp-list-view">
+          <div class="page-header">
+            <h1>Campanhas</h1>
+            <p>Gerencie suas campanhas de prospecção e acompanhe cada contato pelo funil</p>
           </div>
-          <span style="font-size:12px;color:var(--gray-400)">Arraste os cards para mudar o status</span>
+          <div class="action-bar">
+            <div style="font-size:13px;color:var(--gray-500)" id="camp-subtitle">Selecione uma campanha ou crie uma nova</div>
+            <button class="btn btn-primary" onclick="openCampModal()">+ Nova Campanha</button>
+          </div>
+          <div id="camp-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-top:0.5rem"></div>
         </div>
-        <div class="kanban-board" id="kanban-board"></div>
+
+        <!-- KANBAN DE CAMPANHA -->
+        <div id="camp-kanban-view" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
+            <button class="btn btn-secondary btn-sm" onclick="backToCampList()">← Campanhas</button>
+            <div>
+              <h1 style="font-size:20px;font-weight:600;color:var(--gray-900)" id="camp-kanban-title"></h1>
+              <p style="font-size:13px;color:var(--gray-500)" id="camp-kanban-desc"></p>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="openAddContactsToCamp()">+ Adicionar Contatos</button>
+              <button class="btn btn-secondary btn-sm" onclick="openCampStagesModal()">⚙️ Etapas</button>
+            </div>
+          </div>
+          <div class="funnel-row" id="camp-funil-row"></div>
+          <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
+            <div class="search-bar">
+              <span style="color:var(--gray-400);font-size:13px">🔍</span>
+              <input type="text" id="camp-search" placeholder="Filtrar contatos..." oninput="renderCampKanban()">
+            </div>
+            <span style="font-size:12px;color:var(--gray-400)">Arraste os cards para mover entre etapas</span>
+          </div>
+          <div class="kanban-board" id="camp-kanban-board" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))"></div>
+        </div>
+
+        <!-- CAMPANHA GERAL (funil original) -->
+        <div id="camp-geral-view" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
+            <button class="btn btn-secondary btn-sm" onclick="backToCampList()">← Campanhas</button>
+            <div>
+              <h1 style="font-size:20px;font-weight:600;color:var(--gray-900)">Campanha Geral</h1>
+              <p style="font-size:13px;color:var(--gray-500)">Prospecção geral — todos os contatos da sua lista</p>
+            </div>
+          </div>
+          <div class="funnel-row" id="funil-row"></div>
+          <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
+            <div class="search-bar">
+              <span style="color:var(--gray-400);font-size:13px">🔍</span>
+              <input type="text" id="funil-search" placeholder="Filtrar contatos..." oninput="renderKanban()">
+            </div>
+            <span style="font-size:12px;color:var(--gray-400)">Arraste os cards para mudar o status</span>
+          </div>
+          <div class="kanban-board" id="kanban-board"></div>
+        </div>
       </div>
 
       <!-- LEMBRETES -->
       <div id="view-lembretes" class="view">
         <div class="page-header">
-          <h1>Lembretes de Follow-up</h1>
-          <p>Nunca perca o timing de uma abordagem</p>
+          <h1>Agenda</h1>
+          <p>Follow-ups e lembretes de abordagem</p>
         </div>
         <div class="chips-row">
           <div class="chip active" onclick="setLembreteFilter('todos',this)">Todos</div>
@@ -732,6 +784,131 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('wa-modal').classList.remove('open')">Fechar</button>
       <button class="btn btn-gold" onclick="copyWA()">Copiar mensagem</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA CAMPANHA -->
+<div class="modal-overlay" id="camp-modal" onclick="if(event.target===this)closeCampModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="camp-modal-title">Nova Campanha</h2>
+      <button class="close-btn" onclick="closeCampModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome da campanha *</label>
+        <input type="text" id="camp-name" placeholder="Ex: Campanha Médicos Junho">
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="camp-desc" rows="2" placeholder="Objetivo, público-alvo..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data início</label>
+          <input type="date" id="camp-start">
+        </div>
+        <div class="form-group">
+          <label>Data fim</label>
+          <input type="date" id="camp-end">
+        </div>
+      </div>
+      <div class="form-section">Etapas do funil</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px">Defina as etapas em ordem. Você pode editar depois.</div>
+      <div id="camp-stages-input" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addStageInput()">+ Adicionar etapa</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeCampModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCamp()">Criar campanha</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR ETAPAS -->
+<div class="modal-overlay" id="stages-modal" onclick="if(event.target===this)closeStagesModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Etapas da campanha</h2>
+      <button class="close-btn" onclick="closeStagesModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="stages-edit-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addStageToEdit()">+ Nova etapa</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStagesModal()">Fechar</button>
+      <button class="btn btn-primary" onclick="saveStages()">Salvar etapas</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADICIONAR CONTATOS À CAMPANHA -->
+<div class="modal-overlay" id="add-contacts-modal" onclick="if(event.target===this)closeAddContactsModal()">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <h2>Adicionar contatos à campanha</h2>
+      <button class="close-btn" onclick="closeAddContactsModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+        <div class="chip active" onclick="setAddFilter('todos',this)">Todos</div>
+        <div class="chip" onclick="setAddFilter('A',this)">Prioridade A</div>
+        <div class="chip" onclick="setAddFilter('B',this)">Prioridade B</div>
+        <div class="chip" onclick="setAddFilter('C',this)">Prioridade C</div>
+      </div>
+      <div class="search-bar" style="margin-bottom:1rem">
+        <span style="color:var(--gray-400);font-size:13px">🔍</span>
+        <input type="text" id="add-contacts-search" placeholder="Buscar contato..." oninput="renderAddContacts()">
+      </div>
+      <div id="add-contacts-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
+    </div>
+    <div class="modal-footer">
+      <span id="add-contacts-selected" style="font-size:13px;color:var(--gray-500);margin-right:auto">0 selecionados</span>
+      <button class="btn btn-secondary" onclick="closeAddContactsModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmAddContacts()">Adicionar selecionados</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MENSAGEM -->
+<div class="modal-overlay" id="msg-modal" onclick="if(event.target===this)closeMsgModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="msg-modal-title">Enviar mensagem</h2>
+      <button class="close-btn" onclick="closeMsgModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:1rem">
+        <button class="chip active" id="msg-tab-wa" onclick="setMsgTab('wa')">💬 WhatsApp</button>
+        <button class="chip" id="msg-tab-email" onclick="setMsgTab('email')">✉️ Email</button>
+      </div>
+      <div id="msg-wa-section">
+        <div class="form-group">
+          <label>Mensagem</label>
+          <textarea id="msg-wa-body" rows="8" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical"></textarea>
+        </div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Use <strong>{nome}</strong> para inserir o nome do contato automaticamente</div>
+      </div>
+      <div id="msg-email-section" style="display:none">
+        <div class="form-group">
+          <label>Assunto</label>
+          <input type="text" id="msg-email-subject" placeholder="Assunto do email">
+        </div>
+        <div class="form-group">
+          <label>Mensagem</label>
+          <textarea id="msg-email-body" rows="7" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical"></textarea>
+        </div>
+      </div>
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--navy);margin-top:8px">
+        <strong>Destinatário:</strong> <span id="msg-recipient-name"></span> — <span id="msg-recipient-contact"></span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="saveTemplate()">💾 Salvar como template</button>
+      <button class="btn btn-secondary" onclick="closeMsgModal()">Cancelar</button>
+      <button class="btn btn-primary" id="msg-send-btn" onclick="sendMsg()">Abrir WhatsApp</button>
     </div>
   </div>
 </div>
@@ -974,7 +1151,7 @@ function refreshCurrentView(){
   if(!active) return;
   const vid=active.id;
   if(vid==='view-lista'){ renderChips(); renderGrid(); }
-  if(vid==='view-funil') renderFunil();
+  if(vid==='view-campanhas') renderCampList();
   if(vid==='view-lembretes') renderLembretes();
   if(vid==='view-dashboard') renderDashboard();
 }
@@ -1005,11 +1182,11 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Dashboard', lista:'Minha Lista de 200', funil:'Funil de Vendas', lembretes:'Lembretes', exportar:'Exportar', grupos:'Meus Grupos', master:'Visão Master'};
+  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard') renderDashboard();
   if(view==='lista'){ renderChips(); renderGrid(); }
-  if(view==='funil') renderFunil();
+  if(view==='campanhas') renderCampList();
   if(view==='lembretes') renderLembretes();
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
@@ -1573,10 +1750,458 @@ document.addEventListener('keydown', e=>{
   }
 });
 
+// ─── CAMPANHAS ───────────────────────────────────────────────────────────────
+let campaigns = [];
+let campStages = {};       // campId -> stages[]
+let campContacts = {};     // campId -> campaign_contacts[]
+let stageTemplates = {};   // stageId -> templates[]
+let activeCampId = null;
+let addContactsFilter = 'todos';
+let selectedContactIds = new Set();
+let msgContact = null;
+let msgStageId = null;
+let msgTab = 'wa';
+
+const STAGE_COLORS = ['#1B3A6B','#3B82F6','#C9962B','#8B5CF6','#1D9E75','#E24B4A','#0891B2','#D97706'];
+
+async function loadCampaigns(){
+  const {data,error} = await sb.from('campaigns').select('*').order('created_at',{ascending:false});
+  if(error){ console.error(error); return; }
+  campaigns = data||[];
+}
+
+async function loadCampStages(campId){
+  const {data} = await sb.from('campaign_stages').select('*').eq('campaign_id',campId).order('sort_order');
+  campStages[campId] = data||[];
+}
+
+async function loadCampContacts(campId){
+  const {data} = await sb.from('campaign_contacts').select('*').eq('campaign_id',campId);
+  campContacts[campId] = data||[];
+}
+
+async function loadStageTemplates(stageId){
+  const {data} = await sb.from('stage_templates').select('*').eq('stage_id',stageId);
+  stageTemplates[stageId] = data||[];
+}
+
+// ── LISTA DE CAMPANHAS ──
+async function renderCampList(){
+  await loadCampaigns();
+  const el = document.getElementById('camp-cards');
+  document.getElementById('camp-list-view').style.display='';
+  document.getElementById('camp-kanban-view').style.display='none';
+  document.getElementById('camp-geral-view').style.display='none';
+
+  // Campanha Geral sempre primeiro
+  const geralCard = `<div class="camp-card" onclick="openCampGeral()" style="border-left:4px solid var(--gold)">
+    <div class="camp-card-title">📋 Campanha Geral</div>
+    <div class="camp-card-desc">Prospecção geral — todos os contatos da lista</div>
+    <div class="camp-card-meta">
+      <span class="status-badge status-novo">${allFilled().length} contatos</span>
+      <span style="font-size:12px;color:var(--gray-400)">Sempre ativa</span>
+    </div>
+  </div>`;
+
+  if(!campaigns.length){
+    el.innerHTML = geralCard + `<div class="camp-card camp-card-new" onclick="openCampModal()">
+      <div style="font-size:32px;margin-bottom:8px">+</div>
+      <div style="font-size:13px;font-weight:500">Nova campanha</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = geralCard + campaigns.map(c=>`
+    <div class="camp-card" onclick="openCamp('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="camp-card-title">${c.name}</div>
+        <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red);background:#fff" onclick="event.stopPropagation();deleteCamp('${c.id}')">×</button>
+      </div>
+      <div class="camp-card-desc">${c.description||'Sem descrição'}</div>
+      <div class="camp-card-meta">
+        <span class="status-badge ${c.is_active?'status-fechado':'status-descartado'}">${c.is_active?'Ativa':'Encerrada'}</span>
+        ${c.started_at?`<span style="font-size:11px;color:var(--gray-400)">${fmtDate(c.started_at)} ${c.ended_at?'→ '+fmtDate(c.ended_at):''}</span>`:''}
+      </div>
+    </div>`).join('') + `<div class="camp-card camp-card-new" onclick="openCampModal()">
+      <div style="font-size:32px;margin-bottom:8px">+</div>
+      <div style="font-size:13px;font-weight:500">Nova campanha</div>
+    </div>`;
+}
+
+function openCampGeral(){
+  document.getElementById('camp-list-view').style.display='none';
+  document.getElementById('camp-geral-view').style.display='';
+  document.getElementById('camp-kanban-view').style.display='none';
+  renderFunil();
+}
+
+async function openCamp(campId){
+  activeCampId = campId;
+  const camp = campaigns.find(c=>c.id===campId);
+  document.getElementById('camp-kanban-title').textContent = camp.name;
+  document.getElementById('camp-kanban-desc').textContent = camp.description||'';
+  document.getElementById('camp-list-view').style.display='none';
+  document.getElementById('camp-geral-view').style.display='none';
+  document.getElementById('camp-kanban-view').style.display='';
+  await loadCampStages(campId);
+  await loadCampContacts(campId);
+  renderCampKanban();
+}
+
+function backToCampList(){
+  document.getElementById('camp-list-view').style.display='';
+  document.getElementById('camp-kanban-view').style.display='none';
+  document.getElementById('camp-geral-view').style.display='none';
+  activeCampId = null;
+}
+
+// ── KANBAN DE CAMPANHA ──
+function renderCampKanban(){
+  if(!activeCampId) return;
+  const stages = campStages[activeCampId]||[];
+  const cc = campContacts[activeCampId]||[];
+  const q = (document.getElementById('camp-search')||{value:''}).value.toLowerCase();
+
+  // Counters
+  const fr = document.getElementById('camp-funil-row');
+  fr.innerHTML = `<div class="funnel-step"><div class="funnel-num">${cc.length}</div><div class="funnel-label">Total</div></div>`
+    + stages.map(s=>{
+        const cnt = cc.filter(x=>x.stage_id===s.id).length;
+        return `<div class="funnel-step"><div class="funnel-num">${cnt}</div><div class="funnel-label">${s.name}</div></div>`;
+      }).join('');
+
+  // Board
+  const board = document.getElementById('camp-kanban-board');
+  if(!stages.length){
+    board.innerHTML = `<div class="empty-state"><div class="es-icon">⚙️</div><p>Nenhuma etapa configurada. Clique em "Etapas" para criar.</p></div>`;
+    return;
+  }
+
+  // Sem etapa
+  const unassigned = cc.filter(x=>!x.stage_id).map(x=>contacts[x.contact_id]).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+
+  board.innerHTML = [
+    {id:'__unassigned__', name:'Sem etapa', color:'#94A3B8'},
+    ...stages
+  ].map(stage=>{
+    const isUnassigned = stage.id==='__unassigned__';
+    const stageContacts = isUnassigned
+      ? unassigned
+      : cc.filter(x=>x.stage_id===stage.id).map(x=>contacts[x.contact_id]).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+
+    const cardsHtml = stageContacts.length ? stageContacts.map(c=>{
+      const sm = scoreMeta(calcScore(c));
+      const tplBtn = isUnassigned ? '' : `<button class="kc-btn" onclick="openMsgModal('${c.id}','${stage.id}')" style="color:var(--green)">💬 Mensagem</button>`;
+      const nextStage = stages[stages.findIndex(s=>s.id===stage.id)+1];
+      const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${c.id}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
+      return `<div class="kanban-card" draggable="true" data-cid="${c.id}" data-campcontact="${cc.find(x=>x.contact_id===c.id)?.id||''}"
+        ondragstart="onCampDragStart(event,'${c.id}')"
+        ondragend="onDragEnd(event)">
+        <div class="kc-name">${c.name}</div>
+        <div class="kc-meta">
+          <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
+          <span class="kc-phone">${c.phone||srcLabel(c.source)}</span>
+        </div>
+        <div class="kc-actions">
+          ${tplBtn}${moveBtn}
+          <button class="kc-btn edit" onclick="openModal(null,'${c.id}')">✏️</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="kanban-empty">Nenhum contato</div>`;
+
+    return `<div class="kanban-col" style="border-top:3px solid ${stage.color||'#94A3B8'}">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title">${stage.name}</span>
+        <span class="kanban-col-count">${stageContacts.length}</span>
+      </div>
+      <div class="kanban-drop-zone"
+        data-stage="${stage.id}"
+        ondragover="onDragOver(event)"
+        ondragenter="onDragEnter(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onCampDrop(event,'${stage.id}')">
+        ${cardsHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let campDragContactId = null;
+function onCampDragStart(e, contactId){
+  campDragContactId = contactId;
+  e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>{ const el=document.querySelector(`[data-cid="${contactId}"]`); if(el) el.classList.add('dragging'); },0);
+}
+async function onCampDrop(e, stageId){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(!campDragContactId || !activeCampId) return;
+  const cc = campContacts[activeCampId]||[];
+  const entry = cc.find(x=>x.contact_id===campDragContactId);
+  if(!entry) return;
+  const realStageId = stageId==='__unassigned__' ? null : stageId;
+  const {error} = await sb.from('campaign_contacts').update({stage_id:realStageId}).eq('id',entry.id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  entry.stage_id = realStageId;
+  campDragContactId = null;
+  renderCampKanban();
+}
+async function moveCampCard(contactId, stageId){
+  if(!activeCampId) return;
+  const cc = campContacts[activeCampId]||[];
+  const entry = cc.find(x=>x.contact_id===contactId);
+  if(!entry) return;
+  const {error} = await sb.from('campaign_contacts').update({stage_id:stageId}).eq('id',entry.id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  entry.stage_id = stageId;
+  renderCampKanban();
+  showToast('Contato movido ✓');
+}
+
+// ── CRIAR CAMPANHA ──
+function openCampModal(){
+  document.getElementById('camp-modal').classList.add('open');
+  document.getElementById('camp-name').value='';
+  document.getElementById('camp-desc').value='';
+  document.getElementById('camp-start').value='';
+  document.getElementById('camp-end').value='';
+  const si = document.getElementById('camp-stages-input');
+  si.innerHTML='';
+  ['Abordagem','Apresentação','Proposta','Negociação','Fechamento'].forEach(s=>addStageInput(s));
+}
+function closeCampModal(){ document.getElementById('camp-modal').classList.remove('open'); }
+
+function addStageInput(val=''){
+  const si = document.getElementById('camp-stages-input');
+  const idx = si.children.length;
+  const color = STAGE_COLORS[idx % STAGE_COLORS.length];
+  const div = document.createElement('div');
+  div.style.cssText='display:flex;gap:6px;align-items:center';
+  div.innerHTML=`<input type="color" value="${color}" style="width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;padding:2px">
+    <input type="text" value="${val}" placeholder="Nome da etapa" style="flex:1;padding:7px 10px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1">×</button>`;
+  si.appendChild(div);
+}
+
+async function saveCamp(){
+  const name = document.getElementById('camp-name').value.trim();
+  if(!name){ showToast('Nome obrigatório'); return; }
+  const stageInputs = document.querySelectorAll('#camp-stages-input > div');
+  const stageNames = [...stageInputs].map(d=>({
+    name: d.querySelector('input[type=text]').value.trim(),
+    color: d.querySelector('input[type=color]').value
+  })).filter(s=>s.name);
+
+  const btn = document.querySelector('#camp-modal .btn-primary');
+  btn.textContent='Salvando...'; btn.disabled=true;
+
+  const {data:camp, error} = await sb.from('campaigns').insert({
+    user_id: currentUser.id,
+    name,
+    description: document.getElementById('camp-desc').value.trim(),
+    started_at: document.getElementById('camp-start').value||null,
+    ended_at: document.getElementById('camp-end').value||null,
+  }).select().single();
+
+  if(error){ btn.textContent='Criar campanha'; btn.disabled=false; showToast('Erro: '+error.message); return; }
+
+  // Insert stages
+  if(stageNames.length){
+    const stagesData = stageNames.map((s,i)=>({
+      campaign_id: camp.id, user_id: currentUser.id,
+      name: s.name, color: s.color, sort_order: i
+    }));
+    await sb.from('campaign_stages').insert(stagesData);
+  }
+
+  btn.textContent='Criar campanha'; btn.disabled=false;
+  closeCampModal();
+  showToast('Campanha criada ✓');
+  await renderCampList();
+}
+
+async function deleteCamp(campId){
+  if(!confirm('Excluir esta campanha? Os contatos da lista não serão afetados.')) return;
+  await sb.from('campaigns').delete().eq('id',campId);
+  showToast('Campanha removida');
+  renderCampList();
+}
+
+// ── EDITAR ETAPAS ──
+async function openCampStagesModal(){
+  if(!activeCampId) return;
+  await loadCampStages(activeCampId);
+  const stages = campStages[activeCampId]||[];
+  const el = document.getElementById('stages-edit-list');
+  el.innerHTML = stages.map(s=>`<div style="display:flex;gap:6px;align-items:center" data-sid="${s.id}">
+    <input type="color" value="${s.color||'#1B3A6B'}" style="width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;padding:2px">
+    <input type="text" value="${s.name}" placeholder="Nome da etapa" style="flex:1;padding:7px 10px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1">×</button>
+  </div>`).join('');
+  document.getElementById('stages-modal').classList.add('open');
+}
+function closeStagesModal(){ document.getElementById('stages-modal').classList.remove('open'); }
+function addStageToEdit(){
+  const el = document.getElementById('stages-edit-list');
+  const idx = el.children.length;
+  const color = STAGE_COLORS[idx % STAGE_COLORS.length];
+  const div = document.createElement('div');
+  div.style.cssText='display:flex;gap:6px;align-items:center';
+  div.innerHTML=`<input type="color" value="${color}" style="width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;padding:2px">
+    <input type="text" placeholder="Nome da etapa" style="flex:1;padding:7px 10px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1">×</button>`;
+  el.appendChild(div);
+}
+async function saveStages(){
+  if(!activeCampId) return;
+  const rows = document.querySelectorAll('#stages-edit-list > div');
+  const btn = document.querySelector('#stages-modal .btn-primary');
+  btn.textContent='Salvando...'; btn.disabled=true;
+
+  // Delete existing and re-insert
+  await sb.from('campaign_stages').delete().eq('campaign_id',activeCampId);
+  const stagesData = [...rows].map((r,i)=>({
+    campaign_id: activeCampId, user_id: currentUser.id,
+    name: r.querySelector('input[type=text]').value.trim(),
+    color: r.querySelector('input[type=color]').value,
+    sort_order: i
+  })).filter(s=>s.name);
+  if(stagesData.length) await sb.from('campaign_stages').insert(stagesData);
+
+  btn.textContent='Salvar etapas'; btn.disabled=false;
+  closeStagesModal();
+  await loadCampStages(activeCampId);
+  renderCampKanban();
+  showToast('Etapas salvas ✓');
+}
+
+// ── ADICIONAR CONTATOS ──
+function openAddContactsToCamp(){
+  selectedContactIds = new Set();
+  const existing = (campContacts[activeCampId]||[]).map(x=>x.contact_id);
+  document.getElementById('add-contacts-modal').classList.add('open');
+  document.getElementById('add-contacts-search').value='';
+  addContactsFilter='todos';
+  renderAddContacts(existing);
+}
+function closeAddContactsModal(){ document.getElementById('add-contacts-modal').classList.remove('open'); }
+function setAddFilter(f,el){ addContactsFilter=f; document.querySelectorAll('#add-contacts-modal .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderAddContacts(); }
+
+function renderAddContacts(existingIds=null){
+  const existing = existingIds || (campContacts[activeCampId]||[]).map(x=>x.contact_id);
+  const q = document.getElementById('add-contacts-search').value.toLowerCase();
+  let list = allFilled().filter(c=>!existing.includes(c.id)).map(c=>({...c,score:calcScore(c)}));
+  if(addContactsFilter==='A') list=list.filter(c=>c.score>=20);
+  else if(addContactsFilter==='B') list=list.filter(c=>c.score>=10&&c.score<20);
+  else if(addContactsFilter==='C') list=list.filter(c=>c.score!==null&&c.score<10);
+  if(q) list=list.filter(c=>c.name.toLowerCase().includes(q));
+  list.sort((a,b)=>(b.score||0)-(a.score||0));
+
+  const el = document.getElementById('add-contacts-list');
+  if(!list.length){ el.innerHTML='<div class="empty-state"><p>Nenhum contato disponível</p></div>'; return; }
+  el.innerHTML = list.map(c=>{
+    const sm=scoreMeta(c.score);
+    const checked=selectedContactIds.has(c.id);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid ${checked?'var(--navy)':'var(--gray-200)'};border-radius:var(--radius-sm);cursor:pointer;background:${checked?'var(--navy-light)':'#fff'}" onclick="toggleAddContact('${c.id}')">
+      <input type="checkbox" ${checked?'checked':''} style="pointer-events:none" readonly>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${c.name}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${c.phone||srcLabel(c.source)}</div>
+      </div>
+      <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('add-contacts-selected').textContent=`${selectedContactIds.size} selecionados`;
+}
+
+function toggleAddContact(id){
+  if(selectedContactIds.has(id)) selectedContactIds.delete(id);
+  else selectedContactIds.add(id);
+  renderAddContacts();
+}
+
+async function confirmAddContacts(){
+  if(!selectedContactIds.size){ showToast('Selecione ao menos um contato'); return; }
+  const btn=document.querySelector('#add-contacts-modal .btn-primary');
+  btn.textContent='Adicionando...'; btn.disabled=true;
+  const rows=[...selectedContactIds].map(cid=>({campaign_id:activeCampId,contact_id:cid,user_id:currentUser.id,stage_id:null}));
+  const {error}=await sb.from('campaign_contacts').insert(rows);
+  btn.textContent='Adicionar selecionados'; btn.disabled=false;
+  if(error){ showToast('Erro: '+error.message); return; }
+  await loadCampContacts(activeCampId);
+  closeAddContactsModal();
+  renderCampKanban();
+  showToast(`${rows.length} contato(s) adicionado(s) ✓`);
+}
+
+// ── MENSAGENS ──
+async function openMsgModal(contactId, stageId){
+  msgContact = contacts[contactId];
+  msgStageId = stageId;
+  if(!msgContact) return;
+  document.getElementById('msg-recipient-name').textContent = msgContact.name;
+  document.getElementById('msg-recipient-contact').textContent = msgContact.phone||'sem telefone';
+  document.getElementById('msg-modal-title').textContent = `Mensagem para ${msgContact.name}`;
+
+  // Load template if exists
+  await loadStageTemplates(stageId);
+  const templates = stageTemplates[stageId]||[];
+  const waTpl = templates.find(t=>t.type==='whatsapp');
+  const emailTpl = templates.find(t=>t.type==='email');
+
+  const stageName = (campStages[activeCampId]||[]).find(s=>s.id===stageId)?.name||'';
+  document.getElementById('msg-wa-body').value = waTpl?.body || `Olá {nome}, tudo bem?\n\nSou corretor de seguros e previdência e gostaria de apresentar soluções que podem fazer diferença para você.\n\nPodemos conversar?`;
+  document.getElementById('msg-email-subject').value = emailTpl?.subject || `Proposta especial para você — ${stageName}`;
+  document.getElementById('msg-email-body').value = emailTpl?.body || `Olá {nome},\n\nEspero que esteja bem!\n\nGostaria de apresentar soluções personalizadas de proteção e previdência.\n\nFico à disposição.\n\nAbraços,\n${currentUser.user_metadata?.full_name||''}`;
+
+  setMsgTab('wa');
+  document.getElementById('msg-modal').classList.add('open');
+}
+function closeMsgModal(){ document.getElementById('msg-modal').classList.remove('open'); msgContact=null; msgStageId=null; }
+function setMsgTab(tab){
+  msgTab=tab;
+  document.getElementById('msg-wa-section').style.display=tab==='wa'?'':'none';
+  document.getElementById('msg-email-section').style.display=tab==='email'?'':'none';
+  document.getElementById('msg-tab-wa').classList.toggle('active',tab==='wa');
+  document.getElementById('msg-tab-email').classList.toggle('active',tab==='email');
+  document.getElementById('msg-send-btn').textContent=tab==='wa'?'Abrir WhatsApp':'Abrir Email';
+}
+function sendMsg(){
+  if(!msgContact) return;
+  const name = msgContact.name.split(' ')[0];
+  if(msgTab==='wa'){
+    const body = document.getElementById('msg-wa-body').value.replace(/{nome}/gi,name);
+    const phone = (msgContact.phone||'').replace(/\D/g,'');
+    const url = phone ? `https://wa.me/55${phone}?text=${encodeURIComponent(body)}` : `https://wa.me/?text=${encodeURIComponent(body)}`;
+    window.open(url,'_blank');
+  } else {
+    const subject = document.getElementById('msg-email-subject').value;
+    const body = document.getElementById('msg-email-body').value.replace(/{nome}/gi,name);
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,'_blank');
+  }
+  closeMsgModal();
+}
+async function saveTemplate(){
+  if(!msgStageId) return;
+  const type = msgTab;
+  const body = type==='wa' ? document.getElementById('msg-wa-body').value : document.getElementById('msg-email-body').value;
+  const subject = type==='email' ? document.getElementById('msg-email-subject').value : null;
+  // Upsert template for this stage+type
+  const existing = (stageTemplates[msgStageId]||[]).find(t=>t.type===type);
+  if(existing){
+    await sb.from('stage_templates').update({body,subject}).eq('id',existing.id);
+  } else {
+    await sb.from('stage_templates').insert({stage_id:msgStageId,user_id:currentUser.id,type,body,subject});
+  }
+  await loadStageTemplates(msgStageId);
+  showToast('Template salvo ✓');
+}
+
 // update score preview on field change
 document.getElementById('modal-overlay').addEventListener('change', function(e){
   if(e.target.matches('select,input')) updateScorePreview();
 });
+
 </script>
 </body>
 </html>
