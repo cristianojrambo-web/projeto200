@@ -1258,10 +1258,17 @@ async function doLogout(){
 
 // ─── PERSISTENCE (Supabase) ──────────────────────────────────────────────────
 async function loadContacts(){
-  const {data,error}=await sb.from('contacts').select('*').order('created_at',{ascending:true});
-  if(error){ console.error(error); return; }
-  contacts={};
-  (data||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+  contacts = {};
+  const PAGE = 1000;
+  let from = 0;
+  while(true){
+    const {data, error} = await sb.from('contacts').select('*').order('created_at',{ascending:true}).range(from, from+PAGE-1);
+    if(error){ console.error(error); break; }
+    if(!data || data.length===0) break;
+    data.forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+    if(data.length < PAGE) break;
+    from += PAGE;
+  }
 }
 
 async function loadUserGroups(){
