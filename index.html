@@ -2456,7 +2456,7 @@ async function openMsgModal(contactId, stageId){
   // Load template if exists
   await loadStageTemplates(stageId);
   const templates = stageTemplates[stageId]||[];
-  const waTpl = templates.find(t=>t.type==='whatsapp');
+  const waTpl = templates.find(t=>t.type==='wa'||t.type==='whatsapp');
   const emailTpl = templates.find(t=>t.type==='email');
 
   const stageName = (campStages[activeCampId]||[]).find(s=>s.id===stageId)?.name||'';
@@ -2493,16 +2493,23 @@ function sendMsg(){
 }
 async function saveTemplate(){
   if(!msgStageId) return;
-  const type = msgTab;
+  const type = msgTab; // 'wa' or 'email'
   const body = type==='wa' ? document.getElementById('msg-wa-body').value : document.getElementById('msg-email-body').value;
   const subject = type==='email' ? document.getElementById('msg-email-subject').value : null;
-  // Upsert template for this stage+type
-  const existing = (stageTemplates[msgStageId]||[]).find(t=>t.type===type);
+  // Find existing — handle both 'wa' and legacy 'whatsapp' type
+  const existing = (stageTemplates[msgStageId]||[]).find(t=>
+    type==='wa' ? (t.type==='wa'||t.type==='whatsapp') : t.type===type
+  );
+  const btn = document.querySelector('#msg-modal .btn-sm');
+  if(btn){ btn.textContent='Salvando...'; btn.disabled=true; }
+  let error;
   if(existing){
-    await sb.from('stage_templates').update({body,subject}).eq('id',existing.id);
+    ({error} = await sb.from('stage_templates').update({body, subject, type}).eq('id',existing.id));
   } else {
-    await sb.from('stage_templates').insert({stage_id:msgStageId,user_id:currentUser.id,type,body,subject});
+    ({error} = await sb.from('stage_templates').insert({stage_id:msgStageId, user_id:currentUser.id, type, body, subject}));
   }
+  if(btn){ btn.textContent='💾 Salvar como template'; btn.disabled=false; }
+  if(error){ showToast('Erro ao salvar: '+error.message); console.error(error); return; }
   await loadStageTemplates(msgStageId);
   showToast('Template salvo ✓');
 }
