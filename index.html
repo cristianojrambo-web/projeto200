@@ -1468,7 +1468,7 @@ function goTo(view, el){
   if(view==='dashboard') renderDashboard();
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
-  if(view==='lembretes') renderLembretes();
+  if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
 }
@@ -1877,11 +1877,39 @@ function renderLembretes(){
   const tod = today();
   const fut7 = new Date(); fut7.setDate(fut7.getDate()+7);
   const fut7s = fut7.toISOString().split('T')[0];
-  let all = allFilled().filter(c=>c.lembrete);
+
+  // Lembretes da Campanha Geral (contacts.lembrete)
+  const geralItems = allFilled()
+    .filter(c=>c.lembrete)
+    .map(c=>({
+      id: c.id, name: c.name, lembrete: c.lembrete,
+      note: c.obs||srcLabel(c.source), score: calcScore(c),
+      status: c.status||'novo', tipo: 'geral', ccId: null,
+      campName: 'Campanha Geral'
+    }));
+
+  // Lembretes de campanhas específicas (campaign_contacts.lembrete)
+  const campItems = [];
+  Object.entries(campContacts).forEach(([campId, ccList])=>{
+    const camp = campaigns.find(x=>x.id===campId);
+    ccList.filter(x=>x.lembrete).forEach(x=>{
+      const c = contacts[x.contact_id];
+      if(!c) return;
+      campItems.push({
+        id: c.id, name: c.name, lembrete: x.lembrete,
+        note: x.obs||camp?.name||'Campanha', score: calcScore(c),
+        status: c.status||'novo', tipo: 'campanha', ccId: x.id,
+        campId, campName: camp?.name||'Campanha'
+      });
+    });
+  });
+
+  let all = [...geralItems, ...campItems];
   if(lembreteFilter==='vencidos') all=all.filter(c=>c.lembrete<tod);
   else if(lembreteFilter==='hoje') all=all.filter(c=>c.lembrete===tod);
   else if(lembreteFilter==='proximos') all=all.filter(c=>c.lembrete>tod&&c.lembrete<=fut7s);
   all.sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
+
   const el = document.getElementById('lembretes-list');
   if(!all.length){ el.innerHTML='<div class="empty-state"><div class="es-icon">🎉</div><p>Nenhum lembrete encontrado</p></div>'; return; }
   el.innerHTML = all.map(c=>{
@@ -1889,24 +1917,57 @@ function renderLembretes(){
     const isToday = c.lembrete===tod;
     const cls = over?'overdue':isToday?'today':'';
     const dc = over?'var(--red)':isToday?'var(--amber)':'var(--gray-500)';
-    const sm = scoreMeta(calcScore(c));
-    return `<div class="reminder-card ${cls}" style="cursor:pointer" onclick="openModal(null,'${c.id}')">
-      <div class="reminder-dot ${over?'dot-overdue':isToday?'dot-today':'dot-future'}"></div>
-      <div class="reminder-body">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="reminder-name">${c.name}</span>
-          <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
-          <span class="status-badge ${STATUS_META[c.status||'novo'].cls}" style="font-size:10px">${STATUS_META[c.status||'novo'].label}</span>
-        </div>
-        <div class="reminder-note">${c.obs||srcLabel(c.source)}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <div class="reminder-date" style="color:${dc}">${over?'Vencido — ':isToday?'Hoje':''}${fmtDate(c.lembrete)}</div>
-        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();markDone('${c.id}')">✓ Concluir</button>
-      </div>
-    </div>`;
+    const sm = scoreMeta(c.score);
+    const campTag = c.tipo==='campanha'
+      ? '<span style="font-size:10px;background:var(--navy-light);color:var(--navy);padding:1px 6px;border-radius:99px">'+c.campName+'</span>'
+      : '<span style="font-size:10px;background:var(--gold-light);color:var(--gold);padding:1px 6px;border-radius:99px">Geral</span>';
+    const doneBtn = c.tipo==='campanha'
+      ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();markCampDone(\''+c.ccId+'\',\''+c.campId+'\')">✓ Concluir</button>'
+      : '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();markDone(\''+c.id+'\')">✓ Concluir</button>';
+    return '<div class="reminder-card '+cls+'" style="cursor:pointer" onclick="'+( c.tipo==='campanha' ? 'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')' : 'openModal(null,\''+c.id+'\')')+'">'
+      +'<div class="reminder-dot '+(over?'dot-overdue':isToday?'dot-today':'dot-future')+'"></div>'
+      +'<div class="reminder-body">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<span class="reminder-name">'+c.name+'</span>'
+          +campTag
+          +'<span class="score-badge '+sm.cls+'" style="font-size:10px">'+sm.l+'</span>'
+        +'</div>'
+        +'<div class="reminder-note">'+c.note+'</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
+        +'<div class="reminder-date" style="color:'+dc+'">'+(over?'Vencido — ':isToday?'Hoje':'')+fmtDate(c.lembrete)+'</div>'
+        +doneBtn
+      +'</div>'
+      +'</div>';
   }).join('');
 }
+async function markCampDone(ccId, campId){
+  const {error} = await sb.from('campaign_contacts').update({lembrete:null,updated_at:new Date().toISOString()}).eq('id',ccId);
+  if(error){ showToast('Erro: '+error.message); return; }
+  const cc = campContacts[campId]||[];
+  const entry = cc.find(x=>x.id===ccId);
+  if(entry) entry.lembrete='';
+  renderLembretes();
+  updateBadges();
+  showToast('Lembrete concluído');
+}
+
+async function loadAllCampContactsForAgenda(){
+  // Load all campaigns first if not loaded
+  if(!campaigns.length) await loadCampaigns();
+  // Load campaign_contacts for all campaigns that have lembretes
+  const {data} = await sb.from('campaign_contacts').select('*').not('lembrete','is',null);
+  if(data){
+    data.forEach(x=>{
+      if(!campContacts[x.campaign_id]) campContacts[x.campaign_id]=[];
+      // Update or add entry
+      const idx = campContacts[x.campaign_id].findIndex(c=>c.id===x.id);
+      if(idx>=0) campContacts[x.campaign_id][idx]=x;
+      else campContacts[x.campaign_id].push(x);
+    });
+  }
+}
+
 function setLembreteFilter(f,el){ lembreteFilter=f; document.querySelectorAll('.chips-row .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderLembretes(); }
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
