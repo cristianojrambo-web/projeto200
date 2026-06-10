@@ -1320,7 +1320,7 @@ async function loadMasterData(){
   const {data:p} = await sb.from('profiles').select('id, full_name, is_master, can_import_egs, can_import_teleport');
   console.log('Master contacts:', allContacts.length, 'profiles:', p?.length);
   masterContacts = allContacts.map(dbToLocal);
-  masterProfiles = (p||[]).filter(x=>!x.is_master);
+  masterProfiles = p||[]; // all users including master
 }
 
 function dbToLocal(c){
@@ -1703,7 +1703,9 @@ async function renderMaster(){
     mkChip('todos','Todos ('+masterContacts.length+')')
     + masterProfiles.map(p=>{
         const cnt = corretorContacts.filter(c=>c.user_id===p.id).length;
-        return mkChip(p.id, (p.full_name||p.id.slice(0,8))+' ('+cnt+')');
+        if(cnt===0) return '';
+        const tag = p.is_master ? ' 👑' : '';
+        return mkChip(p.id, (p.full_name||p.id.slice(0,8))+tag+' ('+cnt+')');
       }).join('')
     + '<div class="chip '+(masterFilter===IMP_SOURCE_KEY?'active':'')+'" onclick="setMasterFilter(\''+IMP_SOURCE_KEY+'\',this)" style="border-color:var(--gold)">Base EGS ('+egsContacts.length+')</div>'
     + '<div class="chip '+(masterFilter===IMP_TELEPORT_KEY?'active':'')+'" onclick="setMasterFilter(\''+IMP_TELEPORT_KEY+'\',this)" style="border-color:var(--navy)">Base Investseg ('+investsegContacts.length+')</div>';
