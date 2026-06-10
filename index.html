@@ -1152,6 +1152,30 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   </div>
 </div>
 
+<!-- MODAL LEMBRETE CAMPANHA -->
+<div class="modal-overlay" id="cc-modal" onclick="if(event.target===this)closeCcModal()">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <h2 id="cc-modal-title">Acompanhamento</h2>
+      <button class="close-btn" onclick="closeCcModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Lembrete — data de retorno</label>
+        <input type="date" id="cc-lembrete">
+      </div>
+      <div class="form-group">
+        <label>Anotação desta campanha</label>
+        <textarea id="cc-obs" rows="4" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical" placeholder="Ex: Cliente demonstrou interesse, aguardando retorno..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeCcModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCcModal()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1514,7 +1538,10 @@ function renderDashboard(){
 
 function updateBadges(){
   const tod = today();
-  const cnt = allFilled().filter(c=>c.lembrete&&c.lembrete<=tod).length;
+  // Count lembretes from contacts (Campanha Geral) + campaign_contacts
+  const cntContacts = allFilled().filter(c=>c.lembrete&&c.lembrete<=tod).length;
+  const cntCamp = Object.values(campContacts).flat().filter(x=>x.lembrete&&x.lembrete<=tod).length;
+  const cnt = cntContacts + cntCamp;
   const b = document.getElementById('lembrete-badge');
   const ptop = document.getElementById('prog-fill-top');
   const plbl = document.getElementById('prog-label-top');
@@ -2201,19 +2228,28 @@ function renderCampKanban(){
 
     const cardsHtml = stageContacts.length ? stageContacts.map(c=>{
       const sm = scoreMeta(calcScore(c));
+      const ccEntry = cc.find(x=>x.contact_id===c.id);
+      const ccId = ccEntry?.id||'';
+      const ccLembrete = ccEntry?.lembrete||'';
+      const ccObs = ccEntry?.obs||'';
       const tplBtn = isUnassigned ? '' : `<button class="kc-btn" onclick="openMsgModal('${c.id}','${stage.id}')" style="color:var(--green)">💬 Mensagem</button>`;
       const nextStage = stages[stages.findIndex(s=>s.id===stage.id)+1];
       const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${c.id}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
-      return `<div class="kanban-card" draggable="true" data-cid="${c.id}" data-campcontact="${cc.find(x=>x.contact_id===c.id)?.id||''}"
+      const lemColor = ccLembrete<=today() ? 'var(--red)' : 'var(--amber)';
+      const lembreteIndicator = ccLembrete ? '<span style="font-size:10px;color:'+lemColor+'">🔔 '+fmtDate(ccLembrete)+'</span>' : '';
+      return `<div class="kanban-card" draggable="true" data-cid="${c.id}"
         ondragstart="onCampDragStart(event,'${c.id}')"
         ondragend="onDragEnd(event)">
-        <div class="kc-name">${c.name}</div>
+        <div class="kc-name" title="${c.name}">${c.name}</div>
         <div class="kc-meta">
           <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
           <span class="kc-phone">${c.phone||srcLabel(c.source)}</span>
+          ${lembreteIndicator}
         </div>
+        ${ccObs ? `<div style="font-size:11px;color:var(--gray-500);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${ccObs}">📝 ${ccObs}</div>` : ''}
         <div class="kc-actions">
           ${tplBtn}${moveBtn}
+          <button class="kc-btn" onclick="openCampContactModal('${ccId}','${c.name}')" title="Lembrete e anotação">📅</button>
           <button class="kc-btn edit" onclick="openModal(null,'${c.id}')">✏️</button>
         </div>
       </div>`;
@@ -2514,7 +2550,46 @@ async function saveTemplate(){
   showToast('Template salvo ✓');
 }
 
-// ─── IMPORTAR ────────────────────────────────────────────────────────────────
+// ── LEMBRETE/OBS POR CAMPANHA ──
+let activeCcId = null;
+
+function openCampContactModal(ccId, contactName){
+  if(!ccId){ showToast('Contato não encontrado na campanha'); return; }
+  activeCcId = ccId;
+  document.getElementById('cc-modal-title').textContent = 'Acompanhamento — '+contactName;
+  // Find current values
+  const cc = campContacts[activeCampId]||[];
+  const entry = cc.find(x=>x.id===ccId);
+  document.getElementById('cc-lembrete').value = entry?.lembrete||'';
+  document.getElementById('cc-obs').value = entry?.obs||'';
+  document.getElementById('cc-modal').classList.add('open');
+}
+
+function closeCcModal(){
+  document.getElementById('cc-modal').classList.remove('open');
+  activeCcId = null;
+}
+
+async function saveCcModal(){
+  if(!activeCcId) return;
+  const lembrete = document.getElementById('cc-lembrete').value||null;
+  const obs = document.getElementById('cc-obs').value.trim()||null;
+  const btn = document.querySelector('#cc-modal .btn-primary');
+  btn.textContent='Salvando...'; btn.disabled=true;
+  const {error} = await sb.from('campaign_contacts')
+    .update({lembrete, obs, updated_at: new Date().toISOString()})
+    .eq('id', activeCcId);
+  btn.textContent='Salvar'; btn.disabled=false;
+  if(error){ showToast('Erro: '+error.message); return; }
+  // Update local cache
+  const cc = campContacts[activeCampId]||[];
+  const entry = cc.find(x=>x.id===activeCcId);
+  if(entry){ entry.lembrete=lembrete||''; entry.obs=obs||''; }
+  closeCcModal();
+  renderCampKanban();
+  updateBadges();
+  showToast('Acompanhamento salvo ✓');
+}
 const IMP_SOURCE_KEY = 'clientes_egs_importados';
 const IMP_SOURCE = {
   grp:'Importados', key: IMP_SOURCE_KEY,
