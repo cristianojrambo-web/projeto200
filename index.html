@@ -438,11 +438,13 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <h1>Visão Geral</h1>
           <p>Resumo da sua atividade comercial</p>
         </div>
+
+        <!-- STATS -->
         <div class="stats-row">
           <div class="stat-card accent-navy">
-            <div class="stat-label">Total na lista</div>
+            <div class="stat-label">Total de contatos</div>
             <div class="stat-value" id="ds-total">0</div>
-            <div class="stat-sub">meta: 200 contatos</div>
+            <div class="stat-sub">na sua lista</div>
           </div>
           <div class="stat-card accent-a">
             <div class="stat-label">Prioridade A</div>
@@ -455,30 +457,34 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             <div class="stat-sub">10–19 pontos</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Propostas abertas</div>
-            <div class="stat-value" id="ds-proposta">0</div>
+            <div class="stat-label">Campanhas ativas</div>
+            <div class="stat-value" id="ds-camp-count">0</div>
             <div class="stat-sub">em andamento</div>
           </div>
         </div>
 
-        <!-- Progress -->
+        <!-- AGENDA -->
         <div class="card" style="margin-bottom:1.25rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-size:14px;font-weight:600;color:var(--gray-800)">Progresso da lista</div>
-            <div style="font-size:13px;color:var(--gray-500)" id="ds-prog-txt">0 de 200</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800)">🔔 Agenda — lembretes de hoje</div>
+            <button class="btn btn-secondary btn-sm" onclick="goTo('lembretes',document.querySelector('[onclick*=lembretes]'))">Ver todos</button>
           </div>
-          <div class="prog-wrap" style="height:10px"><div class="prog-fill" id="ds-prog-fill" style="width:0%"></div></div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:1rem" id="ds-source-mini"></div>
+          <div id="ds-lembretes-hoje"></div>
         </div>
 
-        <!-- Lembretes de hoje -->
+        <!-- CAMPANHAS + TOP A -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
           <div class="card">
-            <div style="font-size:14px;font-weight:600;margin-bottom:0.75rem;color:var(--gray-800)">🔔 Lembretes para hoje</div>
-            <div id="ds-lembretes-hoje"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+              <div style="font-size:14px;font-weight:600;color:var(--gray-800)">🚀 Campanhas ativas</div>
+              <button class="btn btn-secondary btn-sm" onclick="goTo('campanhas',document.querySelector('[onclick*=campanhas]'))">Ver todas</button>
+            </div>
+            <div id="ds-campanhas"></div>
           </div>
           <div class="card">
-            <div style="font-size:14px;font-weight:600;margin-bottom:0.75rem;color:var(--gray-800)">⭐ Top prioridade A</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+              <div style="font-size:14px;font-weight:600;color:var(--gray-800)">⭐ Top prioridade A — sem campanha</div>
+            </div>
             <div id="ds-top-a"></div>
           </div>
         </div>
@@ -1477,7 +1483,7 @@ function goTo(view, el){
   if(el) el.classList.add('active');
   const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
-  if(view==='dashboard') renderDashboard();
+  if(view==='dashboard'){ loadCampaigns().then(()=>renderDashboard()); }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
   if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
@@ -1491,66 +1497,105 @@ function renderDashboard(){
   const scores = all.map(c=>({...c,score:calcScore(c)}));
   const cA = scores.filter(c=>c.score>=20).length;
   const cB = scores.filter(c=>c.score>=10&&c.score<20).length;
-  const cProp = all.filter(c=>c.status==='proposta').length;
+
   document.getElementById('ds-total').textContent = all.length;
   document.getElementById('ds-a').textContent = cA;
   document.getElementById('ds-b').textContent = cB;
-  document.getElementById('ds-proposta').textContent = cProp;
-  const pct = Math.min(100,Math.round(all.length/200*100));
-  document.getElementById('ds-prog-fill').style.width = pct+'%';
-  if(pct>=100) document.getElementById('ds-prog-fill').classList.add('complete');
-  document.getElementById('ds-prog-txt').textContent = `${all.length} de 200`;
-  const sm2 = document.getElementById('ds-source-mini');
-  const grps2 = [...new Set(userSources.map(s=>s.grp))];
-  sm2.innerHTML = grps2.map(g=>{
-    const keys = userSources.filter(s=>s.grp===g).map(s=>s.key);
-    const total = userSources.filter(s=>s.grp===g).reduce((a,s)=>a+s.slots,0);
-    const done = all.filter(c=>keys.includes(c.source)).length;
-    const p = Math.min(100,Math.round(done/total*100));
-    return `<div style="font-size:11px;color:var(--gray-600)">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>${g}</span><span>${done}/${total}</span></div>
-      <div class="prog-wrap" style="height:4px"><div class="prog-fill" style="width:${p}%;${p>=100?'background:var(--green)':''}"></div></div>
-    </div>`;
-  }).join('');
-  // lembretes hoje
+
+  // Campanhas ativas
+  const activeCamps = campaigns.filter(c=>c.is_active);
+  document.getElementById('ds-camp-count').textContent = activeCamps.length;
+
+  // Agenda — lembretes de hoje (contacts + campaign_contacts)
   const tod = today();
-  const lemHoje = all.filter(c=>c.lembrete&&c.lembrete<=tod).slice(0,5);
+  const geralLem = all.filter(c=>c.lembrete&&c.lembrete<=tod).map(c=>({
+    name:c.name, note:c.obs||srcLabel(c.source), lembrete:c.lembrete,
+    tipo:'geral', id:c.id
+  }));
+  const campLem = [];
+  Object.entries(campContacts).forEach(([campId,ccList])=>{
+    const camp = campaigns.find(x=>x.id===campId);
+    ccList.filter(x=>x.lembrete&&x.lembrete<=tod).forEach(x=>{
+      const c = contacts[x.contact_id];
+      if(c) campLem.push({name:c.name, note:camp?.name||'Campanha', lembrete:x.lembrete, tipo:'campanha', ccId:x.id, campId, id:c.id});
+    });
+  });
+  const allLem = [...geralLem,...campLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete)).slice(0,6);
   const lh = document.getElementById('ds-lembretes-hoje');
-  if(!lemHoje.length){ lh.innerHTML='<div class="empty-state"><p>Nenhum lembrete para hoje 🎉</p></div>'; }
-  else {
-    lh.innerHTML = lemHoje.map(c=>{
+  if(!allLem.length){
+    lh.innerHTML='<div class="empty-state"><p>Nenhum lembrete para hoje 🎉</p></div>';
+  } else {
+    lh.innerHTML = allLem.map(c=>{
       const over = c.lembrete < tod;
-      return `<div class="reminder-card ${over?'overdue':'today'}" style="margin-bottom:6px;cursor:pointer" onclick="openModal(null,'${c.id}')">
-        <div class="reminder-dot ${over?'dot-overdue':'dot-today'}"></div>
-        <div class="reminder-body">
-          <div class="reminder-name">${c.name}</div>
-          <div class="reminder-note">${c.obs||c.status||''}</div>
-        </div>
-        <div class="reminder-date" style="color:${over?'var(--red)':'var(--amber)'}">${fmtDate(c.lembrete)}</div>
-      </div>`;
+      const tag = c.tipo==='campanha'
+        ? '<span style="font-size:10px;background:var(--navy-light);color:var(--navy);padding:1px 5px;border-radius:99px;margin-left:4px">'+c.note+'</span>'
+        : '';
+      return '<div class="reminder-card '+(over?'overdue':'today')+'" style="margin-bottom:6px;cursor:pointer" onclick="'+(c.tipo==='campanha'?'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')':'openModal(null,\''+c.id+'\')')+'">'+
+        '<div class="reminder-dot '+(over?'dot-overdue':'dot-today')+'"></div>'+
+        '<div class="reminder-body">'+
+          '<div style="display:flex;align-items:center;flex-wrap:wrap">'+
+            '<span class="reminder-name">'+c.name+'</span>'+tag+
+          '</div>'+
+        '</div>'+
+        '<div class="reminder-date" style="color:'+(over?'var(--red)':'var(--amber)')+'">'+fmtDate(c.lembrete)+'</div>'+
+        '</div>';
     }).join('');
   }
-  // top A
-  const topA = scores.filter(c=>c.score>=20).sort((a,b)=>b.score-a.score).slice(0,5);
-  const ta = document.getElementById('ds-top-a');
-  if(!topA.length){ ta.innerHTML='<div class="empty-state"><p>Nenhum contato A ainda</p></div>'; }
-  else {
-    ta.innerHTML = topA.map(c=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openModal(null,'${c.id}')">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;color:var(--gray-900)">${c.name}</div>
-          <div style="font-size:11px;color:var(--gray-500)">${srcLabel(c.source)}</div>
-        </div>
-        <span class="score-badge score-a">A ${c.score}</span>
-        <span class="status-badge ${STATUS_META[c.status||'novo'].cls}" style="font-size:10px">${STATUS_META[c.status||'novo'].label}</span>
-      </div>`).join('');
+
+  // Campanhas ativas
+  const dc = document.getElementById('ds-campanhas');
+  if(!activeCamps.length){
+    dc.innerHTML='<div class="empty-state"><p>Nenhuma campanha ativa</p></div>';
+  } else {
+    dc.innerHTML = activeCamps.slice(0,5).map(camp=>{
+      const cc = campContacts[camp.id]||[];
+      const stages = campStages[camp.id]||[];
+      const total = cc.length;
+      const fechados = cc.filter(x=>{
+        const stg = stages.find(s=>s.id===x.stage_id);
+        return stg && stg.name.toLowerCase().includes('fechamento');
+      }).length;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openCampDirect(\''+camp.id+'\')">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:500;color:var(--gray-900)">'+camp.name+'</div>'+
+          '<div style="font-size:11px;color:var(--gray-500)">'+total+' contatos'+( stages.length?' · '+stages.length+' etapas':'' )+'</div>'+
+        '</div>'+
+        '<span class="status-badge status-fechado" style="font-size:10px">Ativa</span>'+
+        '</div>';
+    }).join('');
   }
+
+  // Top A sem campanha
+  const allCampContactIds = new Set(Object.values(campContacts).flat().map(x=>x.contact_id));
+  const topA = scores
+    .filter(c=>c.score>=20 && !allCampContactIds.has(c.id))
+    .sort((a,b)=>b.score-a.score).slice(0,6);
+  const ta = document.getElementById('ds-top-a');
+  if(!topA.length){
+    ta.innerHTML='<div class="empty-state"><p>Todos os contatos A já estão em campanhas 🎉</p></div>';
+  } else {
+    ta.innerHTML = topA.map(c=>
+      '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openModal(null,\''+c.id+'\')">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:500;color:var(--gray-900)">'+c.name+'</div>'+
+          '<div style="font-size:11px;color:var(--gray-500)">'+srcLabel(c.source)+'</div>'+
+        '</div>'+
+        '<span class="score-badge score-a">A '+c.score+'</span>'+
+      '</div>'
+    ).join('');
+  }
+
   updateBadges();
+}
+
+function openCampDirect(campId){
+  const navEl = document.querySelector('[onclick*="campanhas"]');
+  goTo('campanhas', navEl);
+  setTimeout(()=>openCamp(campId), 100);
 }
 
 function updateBadges(){
   const tod = today();
-  // Count lembretes from contacts (Campanha Geral) + campaign_contacts
   const cntContacts = allFilled().filter(c=>c.lembrete&&c.lembrete<=tod).length;
   const cntCamp = Object.values(campContacts).flat().filter(x=>x.lembrete&&x.lembrete<=tod).length;
   const cnt = cntContacts + cntCamp;
