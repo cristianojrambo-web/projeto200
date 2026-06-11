@@ -1126,7 +1126,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <div id="msg-wa-section">
         <div class="form-group">
           <label>Mensagem</label>
-          <textarea id="msg-wa-body" rows="8" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical"></textarea>
+          <textarea id="msg-wa-body" rows="8" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical" oninput="updateWaPreview()"></textarea>
+          <div style="margin-top:8px;font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.05em">Prévia no WhatsApp</div>
+          <div id="wa-preview" style="background:#E8FDD8;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;margin-top:4px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;color:#111"></div>
         </div>
         <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Use <strong>{nome}</strong> para inserir o nome do contato automaticamente</div>
       </div>
@@ -2562,9 +2564,23 @@ async function openMsgModal(contactId, stageId){
   document.getElementById('msg-email-body').value = emailTpl?.body || `Olá {nome},\n\nEspero que esteja bem!\n\nGostaria de apresentar soluções personalizadas de proteção e previdência.\n\nFico à disposição.\n\nAbraços,\n${currentUser.user_metadata?.full_name||''}`;
 
   setMsgTab('wa');
+  updateWaPreview();
   document.getElementById('msg-modal').classList.add('open');
 }
-function closeMsgModal(){ document.getElementById('msg-modal').classList.remove('open'); msgContact=null; msgStageId=null; }
+function updateWaPreview(){
+  const raw = document.getElementById('msg-wa-body').value;
+  const name = msgContact ? msgContact.name.split(' ')[0] : '{nome}';
+  let text = raw.replace(/{nome}/gi, name);
+  // Convert WhatsApp formatting to HTML for preview
+  text = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*(.*?)\*/g,'<strong>$1</strong>')
+    .replace(/_(.*?)_/g,'<em>$1</em>')
+    .replace(/~(.*?)~/g,'<s>$1</s>')
+    .replace(/\n/g,'<br>');
+  const prev = document.getElementById('wa-preview');
+  if(prev) prev.innerHTML = text;
+}
 function setMsgTab(tab){
   msgTab=tab;
   document.getElementById('msg-wa-section').style.display=tab==='wa'?'':'none';
@@ -2579,7 +2595,12 @@ function sendMsg(){
   if(msgTab==='wa'){
     const body = document.getElementById('msg-wa-body').value.replace(/{nome}/gi,name);
     const phone = (msgContact.phone||'').replace(/\D/g,'');
-    const url = phone ? `https://wa.me/55${phone}?text=${encodeURIComponent(body)}` : `https://wa.me/?text=${encodeURIComponent(body)}`;
+    // Use encodeURIComponent but preserve WhatsApp formatting markers and emojis
+    // WhatsApp accepts the text as-is when passed via the API parameter
+    const encoded = encodeURIComponent(body);
+    const url = phone
+      ? `https://api.whatsapp.com/send?phone=55${phone}&text=${encoded}`
+      : `https://api.whatsapp.com/send?text=${encoded}`;
     window.open(url,'_blank');
   } else {
     const subject = document.getElementById('msg-email-subject').value;
