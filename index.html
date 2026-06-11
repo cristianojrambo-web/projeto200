@@ -2581,6 +2581,12 @@ function updateWaPreview(){
   const prev = document.getElementById('wa-preview');
   if(prev) prev.innerHTML = text;
 }
+function closeMsgModal(){
+  document.getElementById('msg-modal').classList.remove('open');
+  msgContact=null; msgStageId=null;
+  const prev = document.getElementById('wa-preview');
+  if(prev) prev.innerHTML='';
+}
 function setMsgTab(tab){
   msgTab=tab;
   document.getElementById('msg-wa-section').style.display=tab==='wa'?'':'none';
