@@ -2178,6 +2178,12 @@ async function loadCampStages(campId){
 async function loadCampContacts(campId){
   const {data} = await sb.from('campaign_contacts').select('*').eq('campaign_id',campId);
   campContacts[campId] = data||[];
+  // Load any contacts not already in memory (from other corretores)
+  const missingIds = (data||[]).map(x=>x.contact_id).filter(id=>!contacts[id]);
+  if(missingIds.length){
+    const {data:extra} = await sb.from('contacts').select('*').in('id',missingIds);
+    (extra||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+  }
 }
 
 async function loadStageTemplates(stageId){
