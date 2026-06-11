@@ -1483,7 +1483,9 @@ function goTo(view, el){
   if(el) el.classList.add('active');
   const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
-  if(view==='dashboard'){ loadCampaigns().then(()=>renderDashboard()); }
+  if(view==='dashboard'){ 
+    loadCampaigns().then(()=>renderDashboard()); 
+  }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
   if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
@@ -2179,6 +2181,7 @@ async function initApp(user){
   document.getElementById('app-loading').style.display='none';
   document.getElementById('app-shell').style.display='flex';
 
+  await loadCampaigns();
   renderDashboard();
   updateBadges();
 }
