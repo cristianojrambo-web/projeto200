@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Projeto 200 — EGS</title>
+<title>CRMSeg — EGS / Investseg</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -320,8 +320,17 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 <div id="login-screen" style="display:none">
   <div class="login-box">
     <div class="login-logo">
-      <div class="brand">EGS</div>
-      <div class="sub">Projeto 200 — Prospecção</div>
+      <!-- CRMSeg Logo -->
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto 12px;display:block">
+        <rect width="64" height="64" rx="16" fill="#1B3A6B"/>
+        <rect x="12" y="18" width="18" height="18" rx="3" fill="#C9962B"/>
+        <rect x="34" y="18" width="18" height="8" rx="2" fill="rgba(255,255,255,0.3)"/>
+        <rect x="34" y="30" width="12" height="6" rx="2" fill="rgba(255,255,255,0.15)"/>
+        <rect x="12" y="40" width="40" height="3" rx="1.5" fill="rgba(255,255,255,0.15)"/>
+        <rect x="12" y="46" width="28" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+      </svg>
+      <div class="brand" style="font-size:32px;letter-spacing:-0.5px">CRMSeg</div>
+      <div class="sub" style="font-size:13px;color:var(--gray-500);margin-top:6px;line-height:1.5">Projeto 200 Prospecção<br>e CRM Personalizado</div>
     </div>
     <h2 id="login-title">Entrar na sua conta</h2>
     <div class="login-error" id="login-error"></div>
@@ -353,7 +362,11 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem" onclick="doRegister()">Criar conta</button>
       <div class="login-switch">Já tem conta? <a onclick="showLogin()">Entrar</a></div>
     </div>
-    <div class="login-footer">EGS / Investseg — uso interno</div>
+    <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--gray-100);text-align:center">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--gray-400);margin-bottom:6px">Uso exclusivo</div>
+      <div style="font-size:14px;font-weight:600;color:var(--navy)">EGS / Investseg</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Sistema interno — acesso restrito</div>
+    </div>
   </div>
 </div>
 
@@ -362,8 +375,20 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div class="brand">EGS</div>
-      <div class="sub">Projeto 200</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+          <rect width="64" height="64" rx="14" fill="rgba(255,255,255,0.12)"/>
+          <rect x="12" y="16" width="18" height="18" rx="3" fill="#C9962B"/>
+          <rect x="34" y="16" width="18" height="8" rx="2" fill="rgba(255,255,255,0.4)"/>
+          <rect x="34" y="28" width="12" height="6" rx="2" fill="rgba(255,255,255,0.2)"/>
+          <rect x="12" y="38" width="40" height="3" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+          <rect x="12" y="45" width="26" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+        </svg>
+        <div>
+          <div class="brand">CRMSeg</div>
+          <div class="sub">EGS / Investseg</div>
+        </div>
+      </div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-section">Principal</div>
@@ -400,7 +425,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <div class="user-avatar" id="user-avatar">C</div>
         <div style="flex:1;min-width:0">
           <div class="user-name" id="user-name-display">Corretor</div>
-          <div class="user-role">EGS / Investseg</div>
+          <div class="user-role">CRMSeg</div>
         </div>
         <button onclick="doLogout()" title="Sair" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);font-size:16px;padding:4px;line-height:1" title="Sair">⏻</button>
       </div>
