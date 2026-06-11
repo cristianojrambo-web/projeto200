@@ -2161,7 +2161,7 @@ async function initApp(user){
   canImportEgs     = isMaster || profile?.can_import_egs === true;
   canImportTeleport= isMaster || profile?.can_import_teleport === true;
 
-  await Promise.all([loadContacts(), loadUserGroups()]);
+  await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns()]);
 
   // Only show import sources to authorized users
   if(canImportEgs) ensureImportSource();
@@ -2181,7 +2181,6 @@ async function initApp(user){
   document.getElementById('app-loading').style.display='none';
   document.getElementById('app-shell').style.display='flex';
 
-  await loadCampaigns();
   renderDashboard();
   updateBadges();
 }
