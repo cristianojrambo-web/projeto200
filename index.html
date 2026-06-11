@@ -2012,14 +2012,13 @@ async function markCampDone(ccId, campId){
 }
 
 async function loadAllCampContactsForAgenda(){
-  // Load all campaigns first if not loaded
   if(!campaigns.length) await loadCampaigns();
-  // Load campaign_contacts for all campaigns that have lembretes
-  const {data} = await sb.from('campaign_contacts').select('*').not('lembrete','is',null);
+  let query = sb.from('campaign_contacts').select('*').not('lembrete','is',null);
+  if(!isMaster) query = query.eq('user_id', currentUser.id);
+  const {data} = await query;
   if(data){
     data.forEach(x=>{
       if(!campContacts[x.campaign_id]) campContacts[x.campaign_id]=[];
-      // Update or add entry
       const idx = campContacts[x.campaign_id].findIndex(c=>c.id===x.id);
       if(idx>=0) campContacts[x.campaign_id][idx]=x;
       else campContacts[x.campaign_id].push(x);
@@ -2233,9 +2232,13 @@ async function loadCampStages(campId){
 }
 
 async function loadCampContacts(campId){
-  const {data} = await sb.from('campaign_contacts').select('*').eq('campaign_id',campId);
+  // Each corretor sees only their own contacts in the campaign
+  // Master sees all
+  let query = sb.from('campaign_contacts').select('*').eq('campaign_id',campId);
+  if(!isMaster) query = query.eq('user_id', currentUser.id);
+  const {data} = await query;
   campContacts[campId] = data||[];
-  // Load any contacts not already in memory (from other corretores)
+  // Load any contacts not already in memory
   const missingIds = (data||[]).map(x=>x.contact_id).filter(id=>!contacts[id]);
   if(missingIds.length){
     const {data:extra} = await sb.from('contacts').select('*').in('id',missingIds);
