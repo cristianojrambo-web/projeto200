@@ -2883,59 +2883,15 @@ async function executeDatasUpdate(rows){
   const isTeleport = activeImpErp==='datas-teleport';
   let total=0, atualizados=0, semCpf=0, semData=0;
 
-  // DEBUG — log first row to console
-  if(rows.length > 0){
-    const r = rows[0];
-    console.log('=== DEBUG DATAS ===');
-    const nascKey = Object.keys(r).find(k=>k.toLowerCase().includes('nasc') || k.toLowerCase().includes('nascimento'));
-    const nascVal = r[nascKey];
-    console.log('Nasc key found:', nascKey, '→ value:', nascVal, 'type:', typeof nascVal);
-    const cpfKey = Object.keys(r).find(k=>k.toLowerCase().includes('cpf'));
-    const cpfVal = String(r[cpfKey]||'').replace(/\D/g,'');
-    console.log('CPF cleaned:', cpfVal);
-    // Test parseDate inline
-    let testDate = null;
-    if(nascVal && typeof nascVal === 'object' && typeof nascVal.getFullYear === 'function'){
-      const y = nascVal.getFullYear();
-      testDate = y+'-'+String(nascVal.getMonth()+1).padStart(2,'0')+'-'+String(nascVal.getDate()).padStart(2,'0');
-    }
-    console.log('parseDate result:', testDate);
-    console.log('CPF in cpfMap:', cpfVal in cpfMapDebug);
-  }
-
-  function parseDate(val){
-    if(!val && val!==0) return null;
-    // JS Date object — use toString check instead of instanceof (cross-frame safe)
-    if(val && typeof val === 'object' && typeof val.getFullYear === 'function'){
-      const y = val.getFullYear();
-      if(y < 1900 || y > 2100) return null;
-      return y+'-'+String(val.getMonth()+1).padStart(2,'0')+'-'+String(val.getDate()).padStart(2,'0');
-    }
-    // Excel serial number
-    if(typeof val === 'number'){
-      const ms = (val - 25569) * 86400 * 1000;
-      const d = new Date(ms);
-      if(isNaN(d.getTime())) return null;
-      const y = d.getUTCFullYear();
-      if(y < 1900 || y > 2100) return null;
-      return y+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
-    }
-    // String dd/mm/yyyy or dd-mm-yyyy
-    if(typeof val === 'string' && val.trim()){
-      const parts = val.trim().split(/[-\/]/);
-      if(parts.length < 3) return null;
-      const [d,m,y] = parts.map(Number);
-      if(!y || y < 1900 || y > 2100) return null;
-      return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    }
-    return null;
-  }
-
-  // Build CPF -> contact_id map
-  const {data:allC} = await sb.from('contacts').select('id,cpf_cnpj').not('cpf_cnpj','is',null);
+  // Build CPF -> contact_id map from the relevant source base
+  const sourceKey = isTeleport ? IMP_TELEPORT_KEY : IMP_SOURCE_KEY;
+  const {data:allC} = await sb.from('contacts')
+    .select('id,cpf_cnpj')
+    .eq('source', sourceKey)
+    .not('cpf_cnpj','is',null);
   const cpfMap = {};
-  let cpfMapDebug = cpfMap;
   (allC||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c.id; });
+  console.log('CPF map:', Object.keys(cpfMap).length, 'entries from source', sourceKey);
 
   showToast('Processando...');
   const updates = [];
@@ -2944,12 +2900,13 @@ async function executeDatasUpdate(rows){
     total++;
     const cpfRaw = isTeleport ? getCol(row,'CPF_CNPJ') : getCol(row,'CPF/CNPJ','CPF','CNPJ');
     const cpf = cpfRaw.replace(/\D/g,'');
+    // Get raw date value (could be Date object, number or string)
     const dateRaw = isTeleport
       ? (row['DATA_DE_NASCIMENTO'] || row['DATA DE NASCIMENTO'] || '')
       : (row['Nascimento'] || row['Data Nascimento'] || row['DATA_NASCIMENTO'] || '');
 
     if(!cpf || !cpfMap[cpf]){ semCpf++; continue; }
-    const iso = parseDate(typeof dateRaw === 'number' ? dateRaw : String(dateRaw));
+    const iso = parseDate(dateRaw);
     if(!iso){ semData++; continue; }
     updates.push({id: cpfMap[cpf], data_nascimento: iso});
   }
