@@ -401,6 +401,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <span class="icon">🚀</span> Campanhas
         <span id="camp-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
+      <div class="nav-item" onclick="goTo('aniversarios',this)">
+        <span class="icon">🎂</span> Aniversários
+        <span id="aniv-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
+      </div>
       <div class="nav-item" onclick="goTo('lembretes',this)">
         <span class="icon">📅</span> Agenda
         <span id="lembrete-badge" style="margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
@@ -584,6 +588,57 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           </div>
           <div class="kanban-board" id="kanban-board"></div>
         </div>
+      </div>
+
+      <!-- ANIVERSÁRIOS -->
+      <div id="view-aniversarios" class="view">
+        <div class="page-header">
+          <h1>Aniversários</h1>
+          <p>Envie mensagens de parabéns para seus contatos</p>
+        </div>
+
+        <!-- Template de mensagem -->
+        <div class="card" style="margin-bottom:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800)">💬 Template de mensagem de aniversário</div>
+            <button class="btn btn-secondary btn-sm" id="aniv-tpl-toggle" onclick="toggleAnivTemplate()">Editar</button>
+          </div>
+          <div id="aniv-tpl-preview" style="font-size:13px;color:var(--gray-600);line-height:1.6;white-space:pre-wrap"></div>
+          <div id="aniv-tpl-edit" style="display:none">
+            <textarea id="aniv-tpl-body" rows="5" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;margin-bottom:8px"></textarea>
+            <div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">Use <strong>{nome}</strong> para o primeiro nome e <strong>{idade}</strong> para a idade</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" onclick="saveAnivTemplate()">Salvar template</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleAnivTemplate()">Cancelar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+          <div class="chips-row" id="aniv-period-chips" style="margin:0;gap:6px">
+            <div class="chip active" onclick="setAnivPeriod('hoje',this)">🎂 Hoje</div>
+            <div class="chip" onclick="setAnivPeriod('semana',this)">📅 Esta semana</div>
+            <div class="chip" onclick="setAnivPeriod('mes',this)">📆 Este mês</div>
+          </div>
+          <div style="width:1px;height:24px;background:var(--gray-200)"></div>
+          <div class="chips-row" id="aniv-source-chips" style="margin:0;gap:6px">
+            <div class="chip active" onclick="setAnivSource('todos',this)">Todos</div>
+            <div class="chip" onclick="setAnivSource('clientes_egs_importados',this)">Base EGS</div>
+            <div class="chip" onclick="setAnivSource('clientes_investseg_importados',this)">Base Investseg</div>
+            <div class="chip" onclick="setAnivSource('manual',this)">Manuais</div>
+          </div>
+          <div class="search-bar" style="margin-left:auto;max-width:220px">
+            <span style="color:var(--gray-400);font-size:13px">🔍</span>
+            <input type="text" id="aniv-search" placeholder="Buscar..." oninput="renderAniversarios()">
+          </div>
+        </div>
+
+        <!-- Contador -->
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:0.75rem" id="aniv-count"></div>
+
+        <!-- Lista -->
+        <div id="aniv-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
 
       <!-- LEMBRETES -->
@@ -918,6 +973,31 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app-shell -->
+
+<!-- MODAL ANIVERSÁRIO WHATSAPP -->
+<div class="modal-overlay" id="aniv-modal" onclick="if(event.target===this)closeAnivModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="aniv-modal-title">🎂 Mensagem de aniversário</h2>
+      <button class="close-btn" onclick="closeAnivModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--navy);margin-bottom:1rem">
+        <strong id="aniv-modal-nome"></strong> — <span id="aniv-modal-info"></span>
+      </div>
+      <div class="form-group">
+        <label>Mensagem</label>
+        <textarea id="aniv-msg-body" rows="7" style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit;resize:vertical" oninput="updateAnivPreview()"></textarea>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Prévia</div>
+      <div id="aniv-msg-preview" style="background:#E8FDD8;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow-y:auto;color:#111"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAnivModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="sendAnivMsg()">💬 Abrir WhatsApp</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL CONTATO -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOuter(event)">
@@ -1367,6 +1447,7 @@ function dbToLocal(c){
     id:c.id, user_id:c.user_id, name:c.name, phone:c.phone||'', source:c.source||'',
     email:c.email||'', cpf_cnpj:c.cpf_cnpj||'', prof_texto:c.prof_texto||'',
     erp_codigo:c.erp_codigo||'', tipo_pessoa:c.tipo_pessoa||'F', importado:c.importado||false,
+    data_nascimento:c.data_nascimento||null,
     renda:c.renda, idade:c.idade, prof:c.prof, civil:c.civil, abord:c.abord, ref:c.ref,
     status:c.status||'novo', lembrete:c.lembrete||'', obs:c.obs||''
   };
@@ -1491,13 +1572,14 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
+  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard'){ 
     loadCampaigns().then(()=>renderDashboard()); 
   }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
+  if(view==='aniversarios'){ renderAniversarios(); }
   if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
@@ -2166,7 +2248,7 @@ async function initApp(user){
   canImportEgs     = isMaster || profile?.can_import_egs === true;
   canImportTeleport= isMaster || profile?.can_import_teleport === true;
 
-  await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns()]);
+  await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns(), loadAnivTemplate()]);
 
   // Only show import sources to authorized users
   if(canImportEgs) ensureImportSource();
@@ -2803,7 +2885,211 @@ async function saveCcModal(){
   showToast('Acompanhamento salvo ✓');
 }
 
-// ─── ATUALIZAR DATAS DE NASCIMENTO ───────────────────────────────────────────
+// ─── ANIVERSÁRIOS ────────────────────────────────────────────────────────────
+let anivPeriod = 'hoje';
+let anivSource = 'todos';
+let anivTemplate = 'Olá {nome}! 🎂\n\nHoje é um dia especial — seu aniversário!\n\nDesejamos a você um dia repleto de alegrias, saúde e realizações.\n\nParabéns! 🎉\n\n*EGS / Investseg Seguros*';
+let anivContact = null;
+
+async function loadAnivTemplate(){
+  const {data} = await sb.from('birthday_templates').select('body').eq('user_id',currentUser.id).single();
+  if(data?.body) anivTemplate = data.body;
+  document.getElementById('aniv-tpl-preview').textContent = anivTemplate;
+  document.getElementById('aniv-tpl-body').value = anivTemplate;
+}
+
+async function saveAnivTemplate(){
+  const body = document.getElementById('aniv-tpl-body').value.trim();
+  if(!body){ showToast('Mensagem não pode ser vazia'); return; }
+  const {error} = await sb.from('birthday_templates').upsert({user_id:currentUser.id, body, updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error){ showToast('Erro ao salvar: '+error.message); return; }
+  anivTemplate = body;
+  document.getElementById('aniv-tpl-preview').textContent = body;
+  toggleAnivTemplate();
+  showToast('Template salvo ✓');
+}
+
+function toggleAnivTemplate(){
+  const edit = document.getElementById('aniv-tpl-edit');
+  const preview = document.getElementById('aniv-tpl-preview');
+  const btn = document.getElementById('aniv-tpl-toggle');
+  const isEditing = edit.style.display !== 'none';
+  edit.style.display = isEditing ? 'none' : '';
+  preview.style.display = isEditing ? '' : 'none';
+  btn.textContent = isEditing ? 'Editar' : 'Cancelar';
+  if(!isEditing) document.getElementById('aniv-tpl-body').value = anivTemplate;
+}
+
+function setAnivPeriod(p, el){
+  anivPeriod = p;
+  document.querySelectorAll('#aniv-period-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderAniversarios();
+}
+
+function setAnivSource(s, el){
+  anivSource = s;
+  document.querySelectorAll('#aniv-source-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderAniversarios();
+}
+
+function getAniversariantes(){
+  const now = new Date();
+  const todayMonth = now.getMonth()+1;
+  const todayDay = now.getDate();
+
+  // Get end of week and end of month
+  const endWeek = new Date(now);
+  endWeek.setDate(endWeek.getDate()+6);
+
+  return allFilled().filter(c=>{
+    if(!c.data_nascimento) return false;
+    const [y,m,d] = c.data_nascimento.split('-').map(Number);
+    if(anivPeriod==='hoje') return m===todayMonth && d===todayDay;
+    if(anivPeriod==='semana'){
+      // Check if birthday falls in next 7 days
+      for(let i=0;i<=6;i++){
+        const check = new Date(now);
+        check.setDate(check.getDate()+i);
+        if(m===check.getMonth()+1 && d===check.getDate()) return true;
+      }
+      return false;
+    }
+    if(anivPeriod==='mes') return m===todayMonth;
+    return false;
+  });
+}
+
+function calcAge(dataNasc){
+  if(!dataNasc) return null;
+  const [y,m,d] = dataNasc.split('-').map(Number);
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if(now.getMonth()+1 < m || (now.getMonth()+1===m && now.getDate()<d)) age--;
+  return age + 1; // age they're turning this year
+}
+
+function fmtBirthday(dataNasc){
+  if(!dataNasc) return '';
+  const [y,m,d] = dataNasc.split('-').map(Number);
+  return String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0');
+}
+
+function renderAniversarios(){
+  let list = getAniversariantes();
+
+  // Filter by source
+  if(anivSource !== 'todos'){
+    if(anivSource === 'manual'){
+      const importedSrcs = [IMP_SOURCE_KEY, IMP_TELEPORT_KEY];
+      list = list.filter(c=>!importedSrcs.includes(c.source));
+    } else {
+      list = list.filter(c=>c.source===anivSource);
+    }
+  }
+
+  // Search
+  const q = document.getElementById('aniv-search').value.toLowerCase();
+  if(q) list = list.filter(c=>c.name.toLowerCase().includes(q));
+
+  // Sort by day/month
+  const now = new Date();
+  list.sort((a,b)=>{
+    const [,ma,da] = a.data_nascimento.split('-').map(Number);
+    const [,mb,db] = b.data_nascimento.split('-').map(Number);
+    if(ma!==mb) return ma-mb;
+    return da-db;
+  });
+
+  const el = document.getElementById('aniv-list');
+  document.getElementById('aniv-count').textContent = list.length
+    ? list.length+' aniversariante(s) encontrado(s)'
+    : '';
+
+  // Update badge
+  const todayList = getAniversariantes().filter(c=>{
+    const [,m,d] = (c.data_nascimento||'').split('-').map(Number);
+    const now = new Date();
+    return m===now.getMonth()+1 && d===now.getDate();
+  });
+  const badge = document.getElementById('aniv-badge');
+  badge.style.display = todayList.length ? '' : 'none';
+  badge.textContent = todayList.length;
+
+  if(!list.length){
+    el.innerHTML = '<div class="empty-state"><div class="es-icon">🎂</div><p>Nenhum aniversariante '+(anivPeriod==='hoje'?'hoje':anivPeriod==='semana'?'nesta semana':'neste mês')+'</p></div>';
+    return;
+  }
+
+  el.innerHTML = list.map(c=>{
+    const age = calcAge(c.data_nascimento);
+    const bday = fmtBirthday(c.data_nascimento);
+    const [,m,d] = c.data_nascimento.split('-').map(Number);
+    const now2 = new Date();
+    const isToday = m===now2.getMonth()+1 && d===now2.getDate();
+    const srcLabel2 = srcLabel(c.source);
+    return '<div class="reminder-card '+(isToday?'today':'')+'" style="background:#fff">'
+      +'<div class="reminder-dot '+(isToday?'dot-today':'dot-future')+'"></div>'
+      +'<div class="reminder-body">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<span class="reminder-name">'+c.name+'</span>'
+          +(isToday?'<span style="background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px">🎂 Hoje!</span>':'')
+          +'<span style="font-size:11px;background:var(--navy-light);color:var(--navy);padding:1px 6px;border-radius:99px">'+srcLabel2+'</span>'
+        +'</div>'
+        +'<div style="font-size:12px;color:var(--gray-500);margin-top:3px">'
+          +bday+(age?' · completa '+age+' anos':'')
+          +(c.phone?' · '+c.phone:'')
+        +'</div>'
+      +'</div>'
+      +'<button class="btn btn-sm btn-primary" onclick="openAnivModal(\''+c.id+'\')">💬 Enviar</button>'
+      +'</div>';
+  }).join('');
+}
+
+function openAnivModal(contactId){
+  anivContact = contacts[contactId];
+  if(!anivContact) return;
+  const firstName = anivContact.name.split(' ')[0];
+  const age = calcAge(anivContact.data_nascimento);
+  const msg = anivTemplate
+    .replace(/{nome}/gi, firstName)
+    .replace(/{idade}/gi, age||'');
+  document.getElementById('aniv-modal-nome').textContent = anivContact.name;
+  document.getElementById('aniv-modal-info').textContent =
+    (age?'completa '+age+' anos · ':'') + (anivContact.phone||'sem telefone');
+  document.getElementById('aniv-modal-title').textContent = '🎂 Mensagem para '+firstName;
+  document.getElementById('aniv-msg-body').value = msg;
+  updateAnivPreview();
+  document.getElementById('aniv-modal').classList.add('open');
+}
+
+function closeAnivModal(){
+  document.getElementById('aniv-modal').classList.remove('open');
+  anivContact = null;
+}
+
+function updateAnivPreview(){
+  const raw = document.getElementById('aniv-msg-body').value;
+  let text = raw
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*(.*?)\*/g,'<strong>$1</strong>')
+    .replace(/_(.*?)_/g,'<em>$1</em>')
+    .replace(/\n/g,'<br>');
+  document.getElementById('aniv-msg-preview').innerHTML = text;
+}
+
+function sendAnivMsg(){
+  if(!anivContact) return;
+  const body = document.getElementById('aniv-msg-body').value;
+  const phone = (anivContact.phone||'').replace(/\D/g,'');
+  const encoded = encodeURIComponent(body);
+  const url = phone
+    ? 'https://api.whatsapp.com/send?phone=55'+phone+'&text='+encoded
+    : 'https://api.whatsapp.com/send?text='+encoded;
+  window.open(url,'_blank');
+  closeAnivModal();
+}
 async function handleDatasFile(file){
   if(!file) return;
   const reader = new FileReader();
