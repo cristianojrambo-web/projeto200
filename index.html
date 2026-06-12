@@ -2887,11 +2887,20 @@ async function executeDatasUpdate(rows){
   if(rows.length > 0){
     const r = rows[0];
     console.log('=== DEBUG DATAS ===');
-    console.log('Keys:', Object.keys(r));
     const nascKey = Object.keys(r).find(k=>k.toLowerCase().includes('nasc') || k.toLowerCase().includes('nascimento'));
-    console.log('Nasc key found:', nascKey, '→ value:', r[nascKey], 'type:', typeof r[nascKey]);
+    const nascVal = r[nascKey];
+    console.log('Nasc key found:', nascKey, '→ value:', nascVal, 'type:', typeof nascVal);
     const cpfKey = Object.keys(r).find(k=>k.toLowerCase().includes('cpf'));
-    console.log('CPF key:', cpfKey, '→ value:', r[cpfKey]);
+    const cpfVal = String(r[cpfKey]||'').replace(/\D/g,'');
+    console.log('CPF cleaned:', cpfVal);
+    // Test parseDate inline
+    let testDate = null;
+    if(nascVal && typeof nascVal === 'object' && typeof nascVal.getFullYear === 'function'){
+      const y = nascVal.getFullYear();
+      testDate = y+'-'+String(nascVal.getMonth()+1).padStart(2,'0')+'-'+String(nascVal.getDate()).padStart(2,'0');
+    }
+    console.log('parseDate result:', testDate);
+    console.log('CPF in cpfMap:', cpfVal in cpfMapDebug);
   }
 
   function parseDate(val){
@@ -2925,6 +2934,7 @@ async function executeDatasUpdate(rows){
   // Build CPF -> contact_id map
   const {data:allC} = await sb.from('contacts').select('id,cpf_cnpj').not('cpf_cnpj','is',null);
   const cpfMap = {};
+  let cpfMapDebug = cpfMap;
   (allC||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c.id; });
 
   showToast('Processando...');
