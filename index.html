@@ -646,9 +646,12 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         </div>
 
         <!-- SELETOR DE ERP -->
-        <div style="display:flex;gap:8px;margin-bottom:1.5rem">
+        <div style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap">
           <button class="btn btn-primary" id="imp-erp-egs" onclick="setImpErp('egs')">📂 ERP Corp — Clientes EGS</button>
           <button class="btn btn-secondary" id="imp-erp-teleport" onclick="setImpErp('teleport')">📂 Teleport — Clientes Investseg</button>
+          <div style="width:1px;background:var(--gray-200);margin:0 4px"></div>
+          <button class="btn btn-secondary" id="imp-erp-datas-egs" onclick="setImpErp('datas-egs')" title="Atualiza somente data de nascimento em quem já está na base">📅 Atualizar datas — EGS</button>
+          <button class="btn btn-secondary" id="imp-erp-datas-teleport" onclick="setImpErp('datas-teleport')" title="Atualiza somente data de nascimento em quem já está na base">📅 Atualizar datas — Investseg</button>
         </div>
 
         <!-- STEP 1: Upload -->
@@ -774,9 +777,35 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             </div>
           </div>
         </div>
-      </div>
 
-        <!-- STEP 2: Preview -->
+        <!-- STEP 4: Atualizar datas de nascimento -->
+        <div id="imp-step4" style="display:none">
+          <div class="card" style="margin-bottom:1rem">
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:0.75rem" id="imp-step4-title">📅 Atualizar datas de nascimento</div>
+            <div class="tip-box" style="margin-bottom:1rem">
+              Somente a data de nascimento será atualizada em quem já está na base pelo CPF/CNPJ. Nenhum contato novo será criado.
+            </div>
+            <div style="border:2px dashed var(--gray-300);border-radius:var(--radius-md);text-align:center;padding:2rem;cursor:pointer;transition:all 0.2s;background:#fff"
+              onclick="document.getElementById('imp-file-input-datas').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='var(--navy-light)'"
+              ondragleave="this.style.borderColor='var(--gray-300)';this.style.background='#fff'">
+              <div style="font-size:36px;margin-bottom:0.75rem">📅</div>
+              <div style="font-size:14px;font-weight:500;color:var(--gray-700);margin-bottom:4px">Clique ou arraste o arquivo aqui</div>
+              <div style="font-size:12px;color:var(--gray-400)">Formatos aceitos: .xlsx, .xls</div>
+              <input type="file" id="imp-file-input-datas" accept=".xlsx,.xls" style="display:none" onchange="handleDatasFile(this.files[0])">
+            </div>
+            <div id="imp-datas-result" style="display:none;margin-top:1rem">
+              <div class="stats-row">
+                <div class="stat-card accent-a"><div class="stat-value" id="imp-datas-atualizados">0</div><div class="stat-label">Datas atualizadas</div></div>
+                <div class="stat-card"><div class="stat-value" id="imp-datas-sem-cpf">0</div><div class="stat-label">Sem CPF na base</div></div>
+                <div class="stat-card"><div class="stat-value" id="imp-datas-sem-data">0</div><div class="stat-label">Sem data no arquivo</div></div>
+                <div class="stat-card accent-navy"><div class="stat-value" id="imp-datas-total">0</div><div class="stat-label">Total no arquivo</div></div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="resetImport()">← Voltar</button>
+        </div>
+      </div>
         <div id="imp-step2" style="display:none">
           <div class="stats-row" style="margin-bottom:1rem">
             <div class="stat-card accent-navy"><div class="stat-value" id="imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
@@ -2825,6 +2854,82 @@ async function saveCcModal(){
   updateBadges();
   showToast('Acompanhamento salvo ✓');
 }
+
+// ─── ATUALIZAR DATAS DE NASCIMENTO ───────────────────────────────────────────
+async function handleDatasFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      let rows;
+      if(activeImpErp==='datas-teleport'){
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        range.s.r = 7;
+        ws['!ref'] = XLSX.utils.encode_range(range);
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      } else {
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      }
+      await executeDatasUpdate(rows);
+    } catch(err){ showToast('Erro ao ler arquivo: '+err.message); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function executeDatasUpdate(rows){
+  const isTeleport = activeImpErp==='datas-teleport';
+  let total=0, atualizados=0, semCpf=0, semData=0;
+
+  // Build CPF -> contact_id map
+  const {data:allC} = await sb.from('contacts').select('id,cpf_cnpj').not('cpf_cnpj','is',null);
+  const cpfMap = {};
+  (allC||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c.id; });
+
+  showToast('Processando...');
+  const updates = [];
+
+  for(const row of rows){
+    total++;
+    const cpfRaw = isTeleport ? getCol(row,'CPF_CNPJ') : getCol(row,'CPF/CNPJ','CPF','CNPJ');
+    const cpf = cpfRaw.replace(/\D/g,'');
+    const dateRaw = isTeleport
+      ? getCol(row,'DATA_DE_NASCIMENTO')
+      : getCol(row,'Nascimento','Data Nascimento','DATA_NASCIMENTO','Dt.Nascimento','Dt Nascimento');
+
+    if(!cpf || !cpfMap[cpf]){ semCpf++; continue; }
+    if(!dateRaw){ semData++; continue; }
+
+    const parts = String(dateRaw).split(/[-\/]/);
+    if(parts.length < 3){ semData++; continue; }
+    const [d,m,y] = parts.map(Number);
+    if(!y || y < 1900 || y > 2100){ semData++; continue; }
+    const iso = y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    updates.push({id: cpfMap[cpf], data_nascimento: iso});
+  }
+
+  // Execute in batches
+  const BATCH = 50;
+  for(let i=0; i<updates.length; i+=BATCH){
+    await Promise.all(updates.slice(i,i+BATCH).map(async u=>{
+      const {error} = await sb.from('contacts').update({data_nascimento:u.data_nascimento}).eq('id',u.id);
+      if(!error){
+        atualizados++;
+        if(contacts[u.id]) contacts[u.id].data_nascimento = u.data_nascimento;
+      }
+    }));
+  }
+
+  document.getElementById('imp-datas-total').textContent = total;
+  document.getElementById('imp-datas-atualizados').textContent = atualizados;
+  document.getElementById('imp-datas-sem-cpf').textContent = semCpf + (total - updates.length - semCpf - semData > 0 ? ' (+sem CPF no arquivo)' : '');
+  document.getElementById('imp-datas-sem-data').textContent = semData;
+  document.getElementById('imp-datas-result').style.display='';
+  document.getElementById('imp-file-input-datas').value='';
+  showToast(atualizados+' datas atualizadas ✓');
+}
+
 const IMP_SOURCE_KEY = 'clientes_egs_importados';
 const IMP_SOURCE = {
   grp:'Importados', key: IMP_SOURCE_KEY,
@@ -2843,13 +2948,28 @@ let activeImpErp = 'egs'; // 'egs' or 'teleport'
 function setImpErp(erp){
   activeImpErp = erp;
   resetImport();
-  document.getElementById('imp-erp-egs').className = erp==='egs' ? 'btn btn-primary' : 'btn btn-secondary';
-  document.getElementById('imp-erp-teleport').className = erp==='teleport' ? 'btn btn-primary' : 'btn btn-secondary';
-  document.getElementById('imp-cols-egs').style.display = erp==='egs' ? 'flex' : 'none';
-  document.getElementById('imp-cols-teleport').style.display = erp==='teleport' ? 'flex' : 'none';
-  document.getElementById('imp-dropzone-title').textContent = erp==='egs'
-    ? 'Clique ou arraste o arquivo do ERP Corp aqui'
-    : 'Clique ou arraste o arquivo do Teleport aqui';
+  const isDataMode = erp.startsWith('datas-');
+  // Update button styles
+  ['egs','teleport','datas-egs','datas-teleport'].forEach(e=>{
+    const btn = document.getElementById('imp-erp-'+e);
+    if(btn) btn.className = e===erp ? 'btn btn-primary' : 'btn btn-secondary';
+  });
+  if(isDataMode){
+    document.getElementById('imp-step1').style.display='none';
+    document.getElementById('imp-step4').style.display='';
+    const src = erp==='datas-egs' ? 'ERP Corp (EGS)' : 'Teleport (Investseg)';
+    document.getElementById('imp-step4-title').textContent = '📅 Atualizar datas de nascimento — '+src;
+    document.getElementById('imp-datas-result').style.display='none';
+    document.getElementById('imp-file-input-datas').value='';
+  } else {
+    document.getElementById('imp-step1').style.display='';
+    document.getElementById('imp-step4').style.display='none';
+    document.getElementById('imp-cols-egs').style.display = erp==='egs' ? 'flex' : 'none';
+    document.getElementById('imp-cols-teleport').style.display = erp==='teleport' ? 'flex' : 'none';
+    document.getElementById('imp-dropzone-title').textContent = erp==='egs'
+      ? 'Clique ou arraste o arquivo do ERP Corp aqui'
+      : 'Clique ou arraste o arquivo do Teleport aqui';
+  }
 }
 
 function ensureImportSource(){
@@ -3188,6 +3308,7 @@ function resetImport(){
   document.getElementById('imp-step1').style.display='';
   document.getElementById('imp-step2').style.display='none';
   document.getElementById('imp-step3').style.display='none';
+  document.getElementById('imp-step4').style.display='none';
   document.getElementById('imp-file-input').value='';
   impRows=[]; impDupRows=[]; impSelected=new Set();
 }
