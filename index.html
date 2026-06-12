@@ -2861,11 +2861,13 @@ async function handleDatasFile(file){
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      // cellDates:true makes SheetJS return JS Date objects for date cells
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      const isTeleport = activeImpErp==='datas-teleport';
+      // ERP Corp: dates are Excel serial numbers → use cellDates:true
+      // Teleport: dates are strings like '22-03-1956' → use cellDates:false
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates: !isTeleport});
       const ws = wb.Sheets[wb.SheetNames[0]];
       let rows;
-      if(activeImpErp==='datas-teleport'){
+      if(isTeleport){
         const range = XLSX.utils.decode_range(ws['!ref']);
         range.s.r = 7;
         ws['!ref'] = XLSX.utils.encode_range(range);
@@ -2919,7 +2921,6 @@ async function executeDatasUpdate(rows){
     .not('cpf_cnpj','is',null);
   const cpfMap = {};
   (allC||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c.id; });
-  console.log('CPF map:', Object.keys(cpfMap).length, 'entries from source', sourceKey);
 
   showToast('Processando...');
   const updates = [];
