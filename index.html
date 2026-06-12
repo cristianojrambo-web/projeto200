@@ -1066,6 +1066,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           </select>
         </div>
         <div class="form-group">
+          <label>Data de nascimento</label>
+          <input type="date" id="f-data-nascimento" placeholder="dd/mm/aaaa">
+        </div>
+        <div class="form-group">
           <label>Facilidade de abordagem</label>
           <select id="f-abord">
             <option value="">Selecione...</option>
@@ -1459,11 +1463,13 @@ async function saveContact(){
   document.getElementById('f-name').style.borderColor='';
 
   const existing = editId ? contacts[editId] : null;
+  const dataNasc = document.getElementById('f-data-nascimento').value||null;
   const data={
     name, phone:document.getElementById('f-phone').value.trim(),
     source:document.getElementById('f-source').value,
     status: existing ? (existing.status||'novo') : 'novo',
     lembrete: existing ? (existing.lembrete||null) : null,
+    data_nascimento: dataNasc,
     obs:document.getElementById('f-obs').value.trim(),
     user_id:currentUser.id,
   };
@@ -2133,6 +2139,7 @@ function openModal(srcKey, id){
     document.getElementById('f-phone').value = c.phone||'';
     sel.value = c.source||SOURCES[0].key;
     SCORE_FIELDS.forEach(f=>{ const el=document.getElementById('f-'+f); if(el) el.value=c[f]!==null&&c[f]!==undefined?c[f]:''; });
+    document.getElementById('f-data-nascimento').value = c.data_nascimento||'';
     document.getElementById('f-obs').value = c.obs||'';
   } else {
     document.getElementById('modal-title').textContent = 'Novo contato';
@@ -2141,6 +2148,7 @@ function openModal(srcKey, id){
     document.getElementById('f-phone').value = '';
     sel.value = srcKey||activeSrc||SOURCES[0].key;
     SCORE_FIELDS.forEach(f=>{ const el=document.getElementById('f-'+f); if(el) el.value=''; });
+    document.getElementById('f-data-nascimento').value = '';
     document.getElementById('f-obs').value = '';
   }
   updateScorePreview();
