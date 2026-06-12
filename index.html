@@ -292,9 +292,22 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   .kanban-board { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 640px) {
-  .sidebar { transform: translateX(-100%); }
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; position: fixed; z-index: 200; }
+  .sidebar.open { transform: translateX(0); }
   .main { margin-left: 0; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 199; }
+  .sidebar-overlay.open { display: block; }
+  .hamburger { display: flex !important; }
+  .content { padding: 1rem; }
+  .stats-row { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .topbar { padding: 0 1rem; }
 }
+.hamburger { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; background: none; border: none; cursor: pointer; flex-shrink: 0; border-radius: var(--radius-sm); }
+.hamburger:hover { background: var(--gray-100); }
+.hamburger span { display: block; width: 20px; height: 2px; background: var(--gray-700); border-radius: 2px; position: relative; }
+.hamburger span::before, .hamburger span::after { content: ''; display: block; width: 20px; height: 2px; background: var(--gray-700); border-radius: 2px; position: absolute; transition: transform 0.2s; }
+.hamburger span::before { top: -6px; }
+.hamburger span::after { top: 6px; }
 
 /* EXPORT ROW */
 .action-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px; }
@@ -362,6 +375,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   </div>
 </div>
 
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div class="app-shell" id="app-shell" style="display:none">
 
   <!-- SIDEBAR -->
@@ -420,6 +434,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   <!-- MAIN -->
   <div class="main">
     <div class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+        <span></span>
+      </button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-right">
         <div id="topbar-progress-wrap" style="display:flex;align-items:center;gap:10px">
@@ -1476,7 +1493,19 @@ function srcLabel(key){ const s=userSources.find(x=>x.key===key)||SOURCES.find(x
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
+function toggleSidebar(){
+  const s = document.querySelector('.sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('open');
+  o.classList.toggle('open');
+}
+function closeSidebar(){
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
 function goTo(view, el){
+  closeSidebar();
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
