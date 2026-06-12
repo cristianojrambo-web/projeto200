@@ -2861,16 +2861,16 @@ async function handleDatasFile(file){
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:false});
       const ws = wb.Sheets[wb.SheetNames[0]];
       let rows;
       if(activeImpErp==='datas-teleport'){
         const range = XLSX.utils.decode_range(ws['!ref']);
         range.s.r = 7;
         ws['!ref'] = XLSX.utils.encode_range(range);
-        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+        rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
       } else {
-        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+        rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
       }
       await executeDatasUpdate(rows);
     } catch(err){ showToast('Erro ao ler arquivo: '+err.message); console.error(err); }
@@ -2881,6 +2881,28 @@ async function handleDatasFile(file){
 async function executeDatasUpdate(rows){
   const isTeleport = activeImpErp==='datas-teleport';
   let total=0, atualizados=0, semCpf=0, semData=0;
+
+  // Helper to parse Excel dates — handles strings AND Excel serial numbers
+  function parseDate(val){
+    if(!val && val!==0) return null;
+    if(typeof val === 'number'){
+      // Excel serial date (days since 1900-01-01 with leap year bug)
+      const ms = (val - 25569) * 86400 * 1000;
+      const d = new Date(ms);
+      if(isNaN(d.getTime())) return null;
+      const y = d.getUTCFullYear();
+      if(y < 1900 || y > 2100) return null;
+      return y+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+    }
+    if(typeof val === 'string'){
+      const parts = val.split(/[-\/]/);
+      if(parts.length < 3) return null;
+      const [d,m,y] = parts.map(Number);
+      if(!y || y < 1900 || y > 2100) return null;
+      return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    }
+    return null;
+  }
 
   // Build CPF -> contact_id map
   const {data:allC} = await sb.from('contacts').select('id,cpf_cnpj').not('cpf_cnpj','is',null);
@@ -2895,17 +2917,12 @@ async function executeDatasUpdate(rows){
     const cpfRaw = isTeleport ? getCol(row,'CPF_CNPJ') : getCol(row,'CPF/CNPJ','CPF','CNPJ');
     const cpf = cpfRaw.replace(/\D/g,'');
     const dateRaw = isTeleport
-      ? getCol(row,'DATA_DE_NASCIMENTO')
-      : getCol(row,'Nascimento','Data Nascimento','DATA_NASCIMENTO','Dt.Nascimento','Dt Nascimento');
+      ? (row['DATA_DE_NASCIMENTO'] || row['DATA DE NASCIMENTO'] || '')
+      : (row['Nascimento'] || row['Data Nascimento'] || row['DATA_NASCIMENTO'] || '');
 
     if(!cpf || !cpfMap[cpf]){ semCpf++; continue; }
-    if(!dateRaw){ semData++; continue; }
-
-    const parts = String(dateRaw).split(/[-\/]/);
-    if(parts.length < 3){ semData++; continue; }
-    const [d,m,y] = parts.map(Number);
-    if(!y || y < 1900 || y > 2100){ semData++; continue; }
-    const iso = y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const iso = parseDate(typeof dateRaw === 'number' ? dateRaw : String(dateRaw));
+    if(!iso){ semData++; continue; }
     updates.push({id: cpfMap[cpf], data_nascimento: iso});
   }
 
@@ -2923,7 +2940,7 @@ async function executeDatasUpdate(rows){
 
   document.getElementById('imp-datas-total').textContent = total;
   document.getElementById('imp-datas-atualizados').textContent = atualizados;
-  document.getElementById('imp-datas-sem-cpf').textContent = semCpf + (total - updates.length - semCpf - semData > 0 ? ' (+sem CPF no arquivo)' : '');
+  document.getElementById('imp-datas-sem-cpf').textContent = semCpf;
   document.getElementById('imp-datas-sem-data').textContent = semData;
   document.getElementById('imp-datas-result').style.display='';
   document.getElementById('imp-file-input-datas').value='';
