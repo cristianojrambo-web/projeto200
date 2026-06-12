@@ -2894,12 +2894,10 @@ async function executeDatasUpdate(rows){
     console.log('CPF key:', cpfKey, '→ value:', r[cpfKey]);
   }
 
-  // Helper to parse dates — handles JS Date objects, serial numbers and strings
   function parseDate(val){
     if(!val && val!==0) return null;
-    // JS Date object (from cellDates:true)
-    if(val instanceof Date){
-      if(isNaN(val.getTime())) return null;
+    // JS Date object — use toString check instead of instanceof (cross-frame safe)
+    if(val && typeof val === 'object' && typeof val.getFullYear === 'function'){
       const y = val.getFullYear();
       if(y < 1900 || y > 2100) return null;
       return y+'-'+String(val.getMonth()+1).padStart(2,'0')+'-'+String(val.getDate()).padStart(2,'0');
