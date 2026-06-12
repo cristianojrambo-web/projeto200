@@ -2879,6 +2879,34 @@ async function handleDatasFile(file){
   reader.readAsArrayBuffer(file);
 }
 
+function parseDate(val){
+  if(!val && val!==0) return null;
+  // JS Date object (from SheetJS cellDates:true)
+  if(val && typeof val === 'object' && typeof val.getFullYear === 'function'){
+    const y = val.getFullYear();
+    if(y < 1900 || y > 2100) return null;
+    return y+'-'+String(val.getMonth()+1).padStart(2,'0')+'-'+String(val.getDate()).padStart(2,'0');
+  }
+  // Excel serial number
+  if(typeof val === 'number'){
+    const ms = (val - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if(isNaN(d.getTime())) return null;
+    const y = d.getUTCFullYear();
+    if(y < 1900 || y > 2100) return null;
+    return y+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  // String dd/mm/yyyy or dd-mm-yyyy
+  if(typeof val === 'string' && val.trim()){
+    const parts = val.trim().split(/[-\/]/);
+    if(parts.length < 3) return null;
+    const [d,m,y] = parts.map(Number);
+    if(!y || y < 1900 || y > 2100) return null;
+    return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  }
+  return null;
+}
+
 async function executeDatasUpdate(rows){
   const isTeleport = activeImpErp==='datas-teleport';
   let total=0, atualizados=0, semCpf=0, semData=0;
