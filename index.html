@@ -2883,6 +2883,17 @@ async function executeDatasUpdate(rows){
   const isTeleport = activeImpErp==='datas-teleport';
   let total=0, atualizados=0, semCpf=0, semData=0;
 
+  // DEBUG — log first row to console
+  if(rows.length > 0){
+    const r = rows[0];
+    console.log('=== DEBUG DATAS ===');
+    console.log('Keys:', Object.keys(r));
+    const nascKey = Object.keys(r).find(k=>k.toLowerCase().includes('nasc') || k.toLowerCase().includes('nascimento'));
+    console.log('Nasc key found:', nascKey, '→ value:', r[nascKey], 'type:', typeof r[nascKey]);
+    const cpfKey = Object.keys(r).find(k=>k.toLowerCase().includes('cpf'));
+    console.log('CPF key:', cpfKey, '→ value:', r[cpfKey]);
+  }
+
   // Helper to parse dates — handles JS Date objects, serial numbers and strings
   function parseDate(val){
     if(!val && val!==0) return null;
