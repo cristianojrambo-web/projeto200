@@ -2256,7 +2256,10 @@ async function loadCampaigns(){
 }
 
 async function loadCampStages(campId){
-  const {data} = await sb.from('campaign_stages').select('*').eq('campaign_id',campId).order('sort_order');
+  const {data} = await sb.from('campaign_stages').select('*')
+    .eq('campaign_id',campId)
+    .lt('sort_order',9999)  // exclude archived
+    .order('sort_order');
   campStages[campId] = data||[];
 }
 
@@ -2534,14 +2537,31 @@ async function deleteCamp(campId){
 // ── EDITAR ETAPAS ──
 async function openCampStagesModal(){
   if(!activeCampId) return;
-  await loadCampStages(activeCampId);
-  const stages = campStages[activeCampId]||[];
+  // Load all stages including archived
+  const {data:allStages} = await sb.from('campaign_stages').select('*')
+    .eq('campaign_id',activeCampId).order('sort_order');
+  const activeStages = (allStages||[]).filter(s=>s.sort_order<9999);
+  const archivedStages = (allStages||[]).filter(s=>s.sort_order>=9999);
   const el = document.getElementById('stages-edit-list');
-  el.innerHTML = stages.map(s=>`<div style="display:flex;gap:6px;align-items:center" data-sid="${s.id}">
+  el.innerHTML = activeStages.map(s=>`<div style="display:flex;gap:6px;align-items:center" data-sid="${s.id}">
     <input type="color" value="${s.color||'#1B3A6B'}" style="width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;padding:2px">
     <input type="text" value="${s.name}" placeholder="Nome da etapa" style="flex:1;padding:7px 10px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);font-family:inherit">
-    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1">×</button>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1" title="Remover etapa">×</button>
   </div>`).join('');
+  // Show archived notice if any
+  const stagesModal = document.getElementById('stages-modal');
+  let archiveNotice = stagesModal.querySelector('.archive-notice');
+  if(archivedStages.length){
+    if(!archiveNotice){
+      archiveNotice = document.createElement('div');
+      archiveNotice.className = 'archive-notice';
+      archiveNotice.style.cssText = 'font-size:12px;color:var(--gray-400);margin-top:10px;padding:8px;background:var(--gray-50);border-radius:var(--radius-sm)';
+      stagesModal.querySelector('.modal-body').appendChild(archiveNotice);
+    }
+    archiveNotice.innerHTML = '📦 '+archivedStages.length+' etapa(s) arquivada(s) — os contatos e templates foram preservados.';
+  } else if(archiveNotice){
+    archiveNotice.remove();
+  }
   document.getElementById('stages-modal').classList.add('open');
 }
 function closeStagesModal(){ document.getElementById('stages-modal').classList.remove('open'); }
@@ -2562,15 +2582,47 @@ async function saveStages(){
   const btn = document.querySelector('#stages-modal .btn-primary');
   btn.textContent='Salvando...'; btn.disabled=true;
 
-  // Delete existing and re-insert
-  await sb.from('campaign_stages').delete().eq('campaign_id',activeCampId);
-  const stagesData = [...rows].map((r,i)=>({
-    campaign_id: activeCampId, user_id: currentUser.id,
-    name: r.querySelector('input[type=text]').value.trim(),
-    color: r.querySelector('input[type=color]').value,
-    sort_order: i
-  })).filter(s=>s.name);
-  if(stagesData.length) await sb.from('campaign_stages').insert(stagesData);
+  const existing = campStages[activeCampId]||[];
+  const existingIds = new Set(existing.map(s=>s.id));
+
+  // IDs still present in the form (not removed by user)
+  const keptIds = new Set();
+  const updates = [];
+  const inserts = [];
+
+  let order = 0;
+  for(const row of rows){
+    const name = row.querySelector('input[type=text]').value.trim();
+    const color = row.querySelector('input[type=color]').value;
+    const sid = row.dataset.sid;
+    if(!name) continue;
+    if(sid && existingIds.has(sid)){
+      // Existing stage — update name/color/order only
+      keptIds.add(sid);
+      updates.push({id:sid, name, color, sort_order:order});
+    } else {
+      // New stage — insert
+      inserts.push({campaign_id:activeCampId, user_id:currentUser.id, name, color, sort_order:order});
+    }
+    order++;
+  }
+
+  // Stages removed from form — archive instead of delete
+  // (set sort_order to 9999 so they're hidden but data preserved)
+  const removedIds = existing.map(s=>s.id).filter(id=>!keptIds.has(id));
+
+  // Execute updates
+  for(const u of updates){
+    await sb.from('campaign_stages').update({name:u.name, color:u.color, sort_order:u.sort_order}).eq('id',u.id);
+  }
+  // Archive removed stages (don't delete — preserves templates and contact positions)
+  for(const id of removedIds){
+    await sb.from('campaign_stages').update({sort_order:9999, name:'[Arquivada] '+(existing.find(s=>s.id===id)?.name||'')}).eq('id',id);
+  }
+  // Insert new stages
+  if(inserts.length){
+    await sb.from('campaign_stages').insert(inserts);
+  }
 
   btn.textContent='Salvar etapas'; btn.disabled=false;
   closeStagesModal();
