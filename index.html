@@ -2861,16 +2861,17 @@ async function handleDatasFile(file){
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:false});
+      // cellDates:true makes SheetJS return JS Date objects for date cells
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       let rows;
       if(activeImpErp==='datas-teleport'){
         const range = XLSX.utils.decode_range(ws['!ref']);
         range.s.r = 7;
         ws['!ref'] = XLSX.utils.encode_range(range);
-        rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       } else {
-        rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       }
       await executeDatasUpdate(rows);
     } catch(err){ showToast('Erro ao ler arquivo: '+err.message); console.error(err); }
@@ -2882,11 +2883,18 @@ async function executeDatasUpdate(rows){
   const isTeleport = activeImpErp==='datas-teleport';
   let total=0, atualizados=0, semCpf=0, semData=0;
 
-  // Helper to parse Excel dates — handles strings AND Excel serial numbers
+  // Helper to parse dates — handles JS Date objects, serial numbers and strings
   function parseDate(val){
     if(!val && val!==0) return null;
+    // JS Date object (from cellDates:true)
+    if(val instanceof Date){
+      if(isNaN(val.getTime())) return null;
+      const y = val.getFullYear();
+      if(y < 1900 || y > 2100) return null;
+      return y+'-'+String(val.getMonth()+1).padStart(2,'0')+'-'+String(val.getDate()).padStart(2,'0');
+    }
+    // Excel serial number
     if(typeof val === 'number'){
-      // Excel serial date (days since 1900-01-01 with leap year bug)
       const ms = (val - 25569) * 86400 * 1000;
       const d = new Date(ms);
       if(isNaN(d.getTime())) return null;
@@ -2894,8 +2902,9 @@ async function executeDatasUpdate(rows){
       if(y < 1900 || y > 2100) return null;
       return y+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
     }
-    if(typeof val === 'string'){
-      const parts = val.split(/[-\/]/);
+    // String dd/mm/yyyy or dd-mm-yyyy
+    if(typeof val === 'string' && val.trim()){
+      const parts = val.trim().split(/[-\/]/);
       if(parts.length < 3) return null;
       const [d,m,y] = parts.map(Number);
       if(!y || y < 1900 || y > 2100) return null;
