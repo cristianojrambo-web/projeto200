@@ -2595,6 +2595,7 @@ function renderCampKanban(){
       const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${c.id}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
       const ccFechamento = ccEntry?.fechamento||'';
       const ccProduto = ccEntry?.produto||'';
+      const lemColor = ccLembrete && ccLembrete<=today() ? 'var(--red)' : 'var(--amber)';
       const fechamentoBadge = ccFechamento==='ganho'
         ? '<span style="font-size:10px;background:#f0fdf4;color:var(--green);border:1px solid var(--green);padding:1px 6px;border-radius:99px;font-weight:600">🏆 Ganho'+( ccProduto?' · '+ccProduto:'' )+'</span>'
         : ccFechamento==='perdido'
