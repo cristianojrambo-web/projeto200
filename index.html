@@ -552,9 +552,12 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <div id="camp-kanban-view" style="display:none">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
             <button class="btn btn-secondary btn-sm" onclick="backToCampList()">← Campanhas</button>
-            <div>
-              <h1 style="font-size:20px;font-weight:600;color:var(--gray-900)" id="camp-kanban-title"></h1>
-              <p style="font-size:13px;color:var(--gray-500)" id="camp-kanban-desc"></p>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div>
+                <h1 style="font-size:20px;font-weight:600;color:var(--gray-900)" id="camp-kanban-title"></h1>
+                <p style="font-size:13px;color:var(--gray-500)" id="camp-kanban-desc"></p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="editCampName()" title="Renomear campanha">✏️</button>
             </div>
             <div style="margin-left:auto;display:flex;gap:8px">
               <button class="btn btn-secondary btn-sm" onclick="openAddContactsToCamp()">+ Adicionar Contatos</button>
@@ -2541,6 +2544,18 @@ async function openCamp(campId){
   await loadCampStages(campId);
   await loadCampContacts(campId);
   renderCampKanban();
+}
+
+async function editCampName(){
+  const camp = campaigns.find(c=>c.id===activeCampId);
+  if(!camp) return;
+  const newName = prompt('Nome da campanha:', camp.name);
+  if(!newName || newName.trim()==='' || newName.trim()===camp.name) return;
+  const {error} = await sb.from('campaigns').update({name:newName.trim()}).eq('id',activeCampId);
+  if(error){ showToast('Erro: '+error.message); return; }
+  camp.name = newName.trim();
+  document.getElementById('camp-kanban-title').textContent = newName.trim();
+  showToast('Campanha renomeada ✓');
 }
 
 function backToCampList(){
