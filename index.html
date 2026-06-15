@@ -261,11 +261,14 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .kc-name { font-size: 13px; font-weight: 500; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 5px; }
 .kc-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .kc-phone { font-size: 11px; color: var(--gray-400); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kc-actions { display: flex; gap: 4px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--gray-100); }
-.kc-btn { flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid var(--gray-200); background: var(--gray-50); border-radius: 4px; cursor: pointer; color: var(--gray-600); font-family: inherit; font-weight: 500; transition: all 0.12s; white-space: nowrap; text-align: center; }
+.kc-actions { display: flex; gap: 4px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--gray-100); flex-wrap: wrap; }
+.kc-btn { font-size: 11px; padding: 4px 8px; border: 1px solid var(--gray-200); background: var(--gray-50); border-radius: 4px; cursor: pointer; color: var(--gray-600); font-family: inherit; font-weight: 500; transition: all 0.12s; white-space: nowrap; text-align: center; }
 .kc-btn:hover { background: var(--gray-100); border-color: var(--gray-300); }
 .kc-btn.edit { color: var(--navy); border-color: var(--navy-light); background: var(--navy-light); }
 .kc-btn.edit:hover { background: #d4e4f5; }
+.kc-btn.remove { color: var(--red); border-color: #fde8e8; background: #fde8e8; }
+.kc-btn.remove:hover { background: #fcc; }
+.kc-btn.move { color: var(--gray-700); background: #fff; flex: 1; }
 .kanban-empty { text-align: center; padding: 1.5rem 0.5rem; color: var(--gray-300); font-size: 12px; }
 .col-novo    .kanban-col-header { border-bottom: 2px solid #94A3B8; }
 .col-abordado .kanban-col-header { border-bottom: 2px solid #3B82F6; }
@@ -2532,10 +2535,14 @@ function renderCampKanban(){
         </div>
         ${ccObs ? `<div style="font-size:11px;color:var(--gray-500);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${ccObs}">📝 ${ccObs}</div>` : ''}
         <div class="kc-actions">
-          ${tplBtn}${moveBtn}
-          <button class="kc-btn" onclick="openCampContactModal('${ccId}','${c.name}')" title="Lembrete e anotação">📅</button>
-          <button class="kc-btn edit" onclick="openModal(null,'${c.id}')" title="Editar contato">✏️</button>
-          <button class="kc-btn" onclick="removeFromCamp('${ccId}','${c.name}')" title="Remover da campanha" style="color:var(--red);border-color:#fde8e8;background:#fde8e8">✕</button>
+          <div style="display:flex;gap:4px;width:100%">
+            ${tplBtn}${moveBtn}
+          </div>
+          <div style="display:flex;gap:4px;width:100%;margin-top:4px">
+            <button class="kc-btn edit" onclick="openModal(null,'${c.id}')" title="Editar contato">✏️ Editar</button>
+            <button class="kc-btn" onclick="openCampContactModal('${ccId}','${c.name}')" title="Lembrete">📅</button>
+            <button class="kc-btn remove" onclick="removeFromCamp('${ccId}','${c.name}')" title="Remover da campanha">✕</button>
+          </div>
         </div>
       </div>`;
     }).join('') : `<div class="kanban-empty">Nenhum contato</div>`;
