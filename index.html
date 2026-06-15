@@ -2129,12 +2129,17 @@ function renderLembretes(){
 }
 async function removeFromCamp(ccId, contactName){
   if(!confirm(`Remover "${contactName}" desta campanha?\n\nO contato não será excluído — apenas removido do kanban desta campanha.`)) return;
+  // Delete the campaign_contact record (lembrete and obs are stored here, so they go with it)
   const {error} = await sb.from('campaign_contacts').delete().eq('id', ccId);
   if(error){ showToast('Erro: '+error.message); return; }
   // Remove from local cache
   if(activeCampId && campContacts[activeCampId]){
     campContacts[activeCampId] = campContacts[activeCampId].filter(x=>x.id!==ccId);
   }
+  // Also remove from agenda cache if present
+  Object.keys(campContacts).forEach(campId=>{
+    campContacts[campId] = (campContacts[campId]||[]).filter(x=>x.id!==ccId);
+  });
   renderCampKanban();
   showToast(`"${contactName}" removido da campanha`);
 }
