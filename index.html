@@ -2124,6 +2124,18 @@ function renderLembretes(){
       +'</div>';
   }).join('');
 }
+async function removeFromCamp(ccId, contactName){
+  if(!confirm(`Remover "${contactName}" desta campanha?\n\nO contato não será excluído — apenas removido do kanban desta campanha.`)) return;
+  const {error} = await sb.from('campaign_contacts').delete().eq('id', ccId);
+  if(error){ showToast('Erro: '+error.message); return; }
+  // Remove from local cache
+  if(activeCampId && campContacts[activeCampId]){
+    campContacts[activeCampId] = campContacts[activeCampId].filter(x=>x.id!==ccId);
+  }
+  renderCampKanban();
+  showToast(`"${contactName}" removido da campanha`);
+}
+
 async function markCampDone(ccId, campId){
   const {error} = await sb.from('campaign_contacts').update({lembrete:null,updated_at:new Date().toISOString()}).eq('id',ccId);
   if(error){ showToast('Erro: '+error.message); return; }
@@ -2522,7 +2534,8 @@ function renderCampKanban(){
         <div class="kc-actions">
           ${tplBtn}${moveBtn}
           <button class="kc-btn" onclick="openCampContactModal('${ccId}','${c.name}')" title="Lembrete e anotação">📅</button>
-          <button class="kc-btn edit" onclick="openModal(null,'${c.id}')">✏️</button>
+          <button class="kc-btn edit" onclick="openModal(null,'${c.id}')" title="Editar contato">✏️</button>
+          <button class="kc-btn" onclick="removeFromCamp('${ccId}','${c.name}')" title="Remover da campanha" style="color:var(--red);border-color:#fde8e8;background:#fde8e8">✕</button>
         </div>
       </div>`;
     }).join('') : `<div class="kanban-empty">Nenhum contato</div>`;
