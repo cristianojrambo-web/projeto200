@@ -1002,6 +1002,69 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
   </div>
 </div>
 
+<!-- MODAL FECHAMENTO -->
+<div class="modal-overlay" id="fechamento-modal" onclick="if(event.target===this)closeFechamentoModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="fechamento-modal-title">🎉 Fechamento</h2>
+      <button class="close-btn" onclick="closeFechamentoModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--navy-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--navy);margin-bottom:1rem">
+        Contato: <strong id="fechamento-contact-name"></strong>
+      </div>
+
+      <!-- Ganho ou Perdido -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
+        <button id="btn-ganho" onclick="setFechamentoTipo('ganho')"
+          style="padding:14px;border:2px solid var(--gray-200);border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:#fff;transition:all 0.15s">
+          🏆 Ganho
+        </button>
+        <button id="btn-perdido" onclick="setFechamentoTipo('perdido')"
+          style="padding:14px;border:2px solid var(--gray-200);border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:#fff;transition:all 0.15s">
+          ❌ Perdido
+        </button>
+      </div>
+
+      <!-- Campos Ganho -->
+      <div id="fechamento-ganho-fields" style="display:none">
+        <div class="form-group">
+          <label>Produto contratado *</label>
+          <input type="text" id="fechamento-produto" placeholder="Ex: Vida Individual, Previdência, Residencial...">
+        </div>
+        <div class="form-group">
+          <label>Data do fechamento</label>
+          <input type="date" id="fechamento-data">
+        </div>
+        <div class="form-group">
+          <label>Campanha de pós-venda</label>
+          <select id="fechamento-camp-posv">
+            <option value="">— Selecione uma campanha —</option>
+          </select>
+        </div>
+        <div class="tip-box">
+          O contato será adicionado automaticamente à campanha de pós-venda selecionada e marcado como <strong>Cliente Ativo</strong>.
+        </div>
+      </div>
+
+      <!-- Campos Perdido -->
+      <div id="fechamento-perdido-fields" style="display:none">
+        <div class="form-group">
+          <label>Motivo da perda (opcional)</label>
+          <textarea id="fechamento-motivo" rows="3" placeholder="Ex: Optou por outra seguradora, preço, não tinha interesse..."></textarea>
+        </div>
+        <div class="tip-box">
+          O card ficará marcado como <strong>Perdido</strong> na campanha. Você pode reativar a qualquer momento.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeFechamentoModal()">Cancelar</button>
+      <button class="btn btn-primary" id="fechamento-btn-confirmar" onclick="confirmarFechamento()" disabled>Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONTATO -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOuter(event)">
   <div class="modal">
@@ -2141,6 +2204,9 @@ async function removeFromCamp(ccId, contactName){
     campContacts[campId] = (campContacts[campId]||[]).filter(x=>x.id!==ccId);
   });
   renderCampKanban();
+  // Refresh agenda if visible
+  if(document.getElementById('view-lembretes').classList.contains('active')) renderLembretes();
+  updateBadges();
   showToast(`"${contactName}" removido da campanha`);
 }
 
@@ -2527,12 +2593,20 @@ function renderCampKanban(){
       const tplBtn = isUnassigned ? '' : `<button class="kc-btn" onclick="openMsgModal('${c.id}','${stage.id}')" style="color:var(--green)">💬 Mensagem</button>`;
       const nextStage = stages[stages.findIndex(s=>s.id===stage.id)+1];
       const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${c.id}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
-      const lemColor = ccLembrete<=today() ? 'var(--red)' : 'var(--amber)';
+      const ccFechamento = ccEntry?.fechamento||'';
+      const ccProduto = ccEntry?.produto||'';
+      const fechamentoBadge = ccFechamento==='ganho'
+        ? '<span style="font-size:10px;background:#f0fdf4;color:var(--green);border:1px solid var(--green);padding:1px 6px;border-radius:99px;font-weight:600">🏆 Ganho'+( ccProduto?' · '+ccProduto:'' )+'</span>'
+        : ccFechamento==='perdido'
+        ? '<span style="font-size:10px;background:#fef2f2;color:var(--red);border:1px solid var(--red);padding:1px 6px;border-radius:99px;font-weight:600">❌ Perdido</span>'
+        : '';
+      const cardBorder = ccFechamento==='ganho' ? 'border-left:3px solid var(--green)' : ccFechamento==='perdido' ? 'border-left:3px solid var(--red);opacity:0.75' : '';
       const lembreteIndicator = ccLembrete ? '<span style="font-size:10px;color:'+lemColor+'">🔔 '+fmtDate(ccLembrete)+'</span>' : '';
-      return `<div class="kanban-card" draggable="true" data-cid="${c.id}"
+      return `<div class="kanban-card" draggable="true" data-cid="${c.id}" style="${cardBorder}"
         ondragstart="onCampDragStart(event,'${c.id}')"
         ondragend="onDragEnd(event)">
         <div class="kc-name" title="${c.name}">${c.name}</div>
+        ${fechamentoBadge ? `<div style="margin-bottom:4px">${fechamentoBadge}</div>` : ''}
         <div class="kc-meta">
           <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
           <span class="kc-phone">${c.phone||srcLabel(c.source)}</span>
@@ -2583,6 +2657,20 @@ async function onCampDrop(e, stageId){
   const entry = cc.find(x=>x.contact_id===campDragContactId);
   if(!entry) return;
   const realStageId = stageId==='__unassigned__' ? null : stageId;
+  // Check if moving to fechamento stage
+  const stage = (campStages[activeCampId]||[]).find(s=>s.id===realStageId);
+  if(stage && isFechamentoStage(stage.name) && entry.fechamento !== 'ganho' && entry.fechamento !== 'perdido'){
+    // First move the card
+    const {error} = await sb.from('campaign_contacts').update({stage_id:realStageId}).eq('id',entry.id);
+    if(error){ showToast('Erro: '+error.message); campDragContactId=null; return; }
+    entry.stage_id = realStageId;
+    campDragContactId = null;
+    renderCampKanban();
+    // Then open fechamento modal
+    const c = contacts[entry.contact_id];
+    if(c) openFechamentoModal(entry.id, entry.contact_id, realStageId, c.name);
+    return;
+  }
   const {error} = await sb.from('campaign_contacts').update({stage_id:realStageId}).eq('id',entry.id);
   if(error){ showToast('Erro: '+error.message); return; }
   entry.stage_id = realStageId;
@@ -2594,11 +2682,17 @@ async function moveCampCard(contactId, stageId){
   const cc = campContacts[activeCampId]||[];
   const entry = cc.find(x=>x.contact_id===contactId);
   if(!entry) return;
+  const stage = (campStages[activeCampId]||[]).find(s=>s.id===stageId);
   const {error} = await sb.from('campaign_contacts').update({stage_id:stageId}).eq('id',entry.id);
   if(error){ showToast('Erro: '+error.message); return; }
   entry.stage_id = stageId;
   renderCampKanban();
   showToast('Contato movido ✓');
+  // Open fechamento modal if moving to fechamento stage
+  if(stage && isFechamentoStage(stage.name) && entry.fechamento !== 'ganho' && entry.fechamento !== 'perdido'){
+    const c = contacts[contactId];
+    if(c) openFechamentoModal(entry.id, contactId, stageId, c.name);
+  }
 }
 
 // ── CRIAR CAMPANHA ──
@@ -3187,6 +3281,95 @@ function sendAnivMsg(){
   window.open(url,'_blank');
   closeAnivModal();
 }
+// ─── FECHAMENTO ──────────────────────────────────────────────────────────────
+let fechamentoData = null;
+let fechamentoTipo = null;
+
+function isFechamentoStage(stageName){
+  return stageName && stageName.toLowerCase().includes('fechamento');
+}
+
+function openFechamentoModal(ccId, contactId, stageId, contactName){
+  fechamentoData = {ccId, contactId, stageId, contactName};
+  fechamentoTipo = null;
+  document.getElementById('fechamento-contact-name').textContent = contactName;
+  document.getElementById('fechamento-modal-title').textContent = '🎯 Fechamento — '+contactName;
+  document.getElementById('fechamento-ganho-fields').style.display='none';
+  document.getElementById('fechamento-perdido-fields').style.display='none';
+  document.getElementById('fechamento-btn-confirmar').disabled=true;
+  document.getElementById('fechamento-produto').value='';
+  document.getElementById('fechamento-data').value=today();
+  document.getElementById('fechamento-motivo').value='';
+  document.getElementById('btn-ganho').style.cssText='padding:14px;border:2px solid var(--gray-200);border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:#fff;transition:all 0.15s';
+  document.getElementById('btn-perdido').style.cssText='padding:14px;border:2px solid var(--gray-200);border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:#fff;transition:all 0.15s';
+  const sel = document.getElementById('fechamento-camp-posv');
+  sel.innerHTML = '<option value="">— Selecione uma campanha —</option>'
+    + campaigns.filter(c=>c.is_active && c.id!==activeCampId)
+      .map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  document.getElementById('fechamento-modal').classList.add('open');
+}
+
+function closeFechamentoModal(){
+  document.getElementById('fechamento-modal').classList.remove('open');
+  fechamentoData=null; fechamentoTipo=null;
+}
+
+function setFechamentoTipo(tipo){
+  fechamentoTipo=tipo;
+  const isGanho=tipo==='ganho';
+  document.getElementById('fechamento-ganho-fields').style.display=isGanho?'':'none';
+  document.getElementById('fechamento-perdido-fields').style.display=isGanho?'none':'';
+  document.getElementById('fechamento-btn-confirmar').disabled=false;
+  document.getElementById('btn-ganho').style.cssText='padding:14px;border:2px solid '+(isGanho?'var(--green)':'var(--gray-200)')+';border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:'+(isGanho?'#f0fdf4':'#fff')+';transition:all 0.15s;color:'+(isGanho?'var(--green)':'inherit');
+  document.getElementById('btn-perdido').style.cssText='padding:14px;border:2px solid '+(!isGanho?'var(--red)':'var(--gray-200)')+';border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:'+(!isGanho?'#fef2f2':'#fff')+';transition:all 0.15s;color:'+(!isGanho?'var(--red)':'inherit');
+}
+
+async function confirmarFechamento(){
+  if(!fechamentoData || !fechamentoTipo) return;
+  const btn = document.getElementById('fechamento-btn-confirmar');
+  btn.textContent='Salvando...'; btn.disabled=true;
+  const {ccId, contactId, stageId, contactName} = fechamentoData;
+
+  if(fechamentoTipo==='ganho'){
+    const produto = document.getElementById('fechamento-produto').value.trim();
+    if(!produto){ showToast('Informe o produto contratado'); btn.textContent='Confirmar'; btn.disabled=false; return; }
+    const dataFech = document.getElementById('fechamento-data').value||today();
+    const campPosvId = document.getElementById('fechamento-camp-posv').value;
+    const {error} = await sb.from('campaign_contacts').update({
+      stage_id: stageId, fechamento:'ganho', produto, fechamento_data:dataFech
+    }).eq('id',ccId);
+    if(error){ showToast('Erro: '+error.message); btn.textContent='Confirmar'; btn.disabled=false; return; }
+    await sb.from('contacts').update({status:'fechado'}).eq('id',contactId);
+    if(contacts[contactId]) contacts[contactId].status='fechado';
+    if(campPosvId){
+      const {data:newCc} = await sb.from('campaign_contacts').insert({
+        campaign_id:campPosvId, contact_id:contactId, user_id:currentUser.id, stage_id:null,
+        obs:'Cliente via '+(campaigns.find(c=>c.id===activeCampId)?.name||'campanha')+' · '+produto
+      }).select().single();
+      if(newCc){
+        if(!campContacts[campPosvId]) campContacts[campPosvId]=[];
+        campContacts[campPosvId].push(newCc);
+      }
+    }
+    const entry=(campContacts[activeCampId]||[]).find(x=>x.id===ccId);
+    if(entry){entry.fechamento='ganho';entry.produto=produto;entry.stage_id=stageId;}
+    showToast('🏆 '+contactName+' é agora cliente ativo!');
+  } else {
+    const motivo = document.getElementById('fechamento-motivo').value.trim();
+    const {error} = await sb.from('campaign_contacts').update({
+      stage_id:stageId, fechamento:'perdido', motivo_perda:motivo||null
+    }).eq('id',ccId);
+    if(error){ showToast('Erro: '+error.message); btn.textContent='Confirmar'; btn.disabled=false; return; }
+    const entry=(campContacts[activeCampId]||[]).find(x=>x.id===ccId);
+    if(entry){entry.fechamento='perdido';entry.motivo_perda=motivo;entry.stage_id=stageId;}
+    showToast('Fechamento registrado como perdido');
+  }
+  btn.textContent='Confirmar'; btn.disabled=false;
+  closeFechamentoModal();
+  renderCampKanban();
+  updateBadges();
+}
+
 async function handleDatasFile(file){
   if(!file) return;
   const reader = new FileReader();
