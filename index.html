@@ -401,7 +401,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <span class="icon">🚀</span> Campanhas
         <span id="camp-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
-      <div class="nav-item" onclick="goTo('aniversarios',this)">
+      <div class="nav-item" id="nav-aniversarios" onclick="goTo('aniversarios',this)">
         <span class="icon">🎂</span> Aniversários
         <span id="aniv-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
@@ -621,7 +621,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             <div class="chip" onclick="setAnivPeriod('semana',this)">📅 Esta semana</div>
             <div class="chip" onclick="setAnivPeriod('mes',this)">📆 Este mês</div>
           </div>
-          <div style="width:1px;height:24px;background:var(--gray-200)"></div>
+          <div style="width:1px;height:24px;background:var(--gray-200)" id="aniv-source-divider"></div>
           <div class="chips-row" id="aniv-source-chips" style="margin:0;gap:6px">
             <div class="chip active" onclick="setAnivSource('todos',this)">Todos</div>
             <div class="chip" onclick="setAnivSource('clientes_egs_importados',this)">Base EGS</div>
@@ -942,9 +942,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
               <thead><tr>
                 <th>Corretor</th>
                 <th>E-mail</th>
-                <th style="text-align:center">Importar EGS</th>
-                <th style="text-align:center">Importar Teleport</th>
-                <th></th>
+                <th style="text-align:center">Base EGS</th>
+                <th style="text-align:center">Base Investseg</th>
+                <th>Perfil</th>
               </tr></thead>
               <tbody id="perms-tbody"></tbody>
             </table>
@@ -1485,7 +1485,18 @@ async function saveContact(){
   } else {
     const {data:row,error:err}=await sb.from('contacts').insert(data).select().single();
     error=err;
-    if(!error && row) contacts[row.id]=dbToLocal(row);
+    // If RLS error, try refreshing session and retry once
+    if(error && error.message && error.message.includes('row-level security')){
+      console.log('RLS error — refreshing session and retrying...');
+      const {data:refreshed} = await sb.auth.refreshSession();
+      if(refreshed?.session){
+        const {data:row2,error:err2}=await sb.from('contacts').insert(data).select().single();
+        error=err2;
+        if(!error && row2) contacts[row2.id]=dbToLocal(row2);
+      }
+    } else if(!error && row){
+      contacts[row.id]=dbToLocal(row);
+    }
   }
 
   btn.textContent='Salvar contato'; btn.disabled=false;
@@ -1585,7 +1596,15 @@ function goTo(view, el){
   }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
-  if(view==='aniversarios'){ renderAniversarios(); }
+  if(view==='aniversarios'){
+    // Hide source filter for secretárias (their source is fixed)
+    const isSecretaria = anivSource === IMP_SOURCE_KEY || anivSource === IMP_TELEPORT_KEY;
+    const chips = document.getElementById('aniv-source-chips');
+    const divider = document.getElementById('aniv-source-divider');
+    if(chips) chips.style.display = isSecretaria && !isMaster ? 'none' : '';
+    if(divider) divider.style.display = isSecretaria && !isMaster ? 'none' : '';
+    renderAniversarios();
+  }
   if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
@@ -1843,7 +1862,7 @@ async function renderMaster(){
 
   // ── PERMISSOES ──
   const {data:allProfiles} = await sb.from('profiles')
-    .select('id, full_name, is_master, can_import_egs, can_import_teleport')
+    .select('id, full_name, is_master, can_import_egs, can_import_teleport, role')
     .order('full_name');
 
   const permsBody = document.getElementById('perms-tbody');
@@ -1862,7 +1881,14 @@ async function renderMaster(){
           onchange="togglePerm('${p.id}','can_import_teleport',this.checked)"
           style="width:16px;height:16px;cursor:pointer">
       </td>
-      <td></td>
+      <td>
+        <select onchange="togglePerm('${p.id}','role',this.value)"
+          style="font-size:12px;padding:4px 8px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);background:#fff;cursor:pointer">
+          <option value="corretor" ${(p.role||'corretor')==='corretor'?'selected':''}>Corretor</option>
+          <option value="secretaria_egs" ${p.role==='secretaria_egs'?'selected':''}>Secretária EGS</option>
+          <option value="secretaria_investseg" ${p.role==='secretaria_investseg'?'selected':''}>Secretária Investseg</option>
+        </select>
+      </td>
     </tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--gray-400)">Nenhum corretor cadastrado</td></tr>';
 
@@ -2249,12 +2275,14 @@ async function initApp(user){
 
   // Load profile + permissions
   const {data:profile} = await sb.from('profiles')
-    .select('is_master, can_import_egs, can_import_teleport')
+    .select('is_master, can_import_egs, can_import_teleport, role')
     .eq('id', user.id).single();
 
-  isMaster         = profile?.is_master === true;
-  canImportEgs     = isMaster || profile?.can_import_egs === true;
-  canImportTeleport= isMaster || profile?.can_import_teleport === true;
+  isMaster          = profile?.is_master === true;
+  canImportEgs      = isMaster || profile?.can_import_egs === true;
+  canImportTeleport = isMaster || profile?.can_import_teleport === true;
+  const userRole    = profile?.role || 'corretor';
+  const isSecretaria = userRole === 'secretaria_egs' || userRole === 'secretaria_investseg';
 
   await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns(), loadAnivTemplate()]);
 
@@ -2262,9 +2290,25 @@ async function initApp(user){
   if(canImportEgs) ensureImportSource();
   if(canImportTeleport) ensureTeleportSource();
 
-  // Nav visibility
-  document.getElementById('nav-master').style.display  = isMaster ? '' : 'none';
-  document.getElementById('nav-importar').style.display = isMaster ? '' : 'none';
+  // Nav visibility — secretária vê só aniversários
+  if(isSecretaria){
+    document.querySelectorAll('.nav-item').forEach(n=>n.style.display='none');
+    document.querySelectorAll('.nav-section').forEach(n=>n.style.display='none');
+    document.getElementById('nav-aniversarios').style.display='';
+    // Auto-filter by their base
+    if(userRole==='secretaria_egs') anivSource = IMP_SOURCE_KEY;
+    if(userRole==='secretaria_investseg') anivSource = IMP_TELEPORT_KEY;
+    // Hide source filter chips — already fixed
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('app-shell').style.display='flex';
+    // Navigate directly to aniversários
+    goTo('aniversarios', document.getElementById('nav-aniversarios'));
+    updateBadges();
+    return;
+  }
+
+  document.getElementById('nav-master').style.display   = isMaster ? '' : 'none';
+  document.getElementById('nav-importar').style.display  = isMaster ? '' : 'none';
 
   if(isMaster){
     document.querySelectorAll('.master-badge').forEach(b=>b.remove());
