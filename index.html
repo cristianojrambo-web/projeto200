@@ -940,6 +940,25 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         </div>
         <div class="stats-row" id="master-stats"></div>
 
+        <!-- LOGS DE ACESSO -->
+        <div class="card" style="margin-top:1.25rem;margin-bottom:1.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800)">📊 Logs de acesso</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="logs-filter-user" onchange="renderAccessLogs()" style="font-size:12px;padding:4px 8px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);background:#fff">
+                <option value="">Todos os usuários</option>
+              </select>
+              <select id="logs-filter-period" onchange="renderAccessLogs()" style="font-size:12px;padding:4px 8px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);background:#fff">
+                <option value="7">Últimos 7 dias</option>
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="0">Todos</option>
+              </select>
+            </div>
+          </div>
+          <div id="access-logs-content"></div>
+        </div>
+
         <!-- PERMISSÕES -->
         <div class="card" style="margin-top:1rem;margin-bottom:1.5rem">
           <div style="font-size:14px;font-weight:600;margin-bottom:1rem;color:var(--gray-800)">🔑 Permissões dos corretores</div>
@@ -1919,6 +1938,101 @@ async function saveGrupo(key){
 }
 
 // ─── MASTER ───────────────────────────────────────────────────────────────────
+let accessLogs = [];
+
+async function loadAccessLogs(){
+  const {data} = await sb.from('access_logs')
+    .select('user_id, accessed_at')
+    .order('accessed_at', {ascending:false})
+    .limit(500);
+  accessLogs = data||[];
+}
+
+async function renderAccessLogs(){
+  const el = document.getElementById('access-logs-content');
+  if(!el) return;
+
+  // Build user filter options
+  const userSel = document.getElementById('logs-filter-user');
+  const currentUserFilter = userSel.value;
+  if(userSel.options.length <= 1){
+    masterProfiles.forEach(p=>{
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.full_name||p.id.slice(0,8);
+      userSel.appendChild(opt);
+    });
+    userSel.value = currentUserFilter;
+  }
+
+  const periodDays = parseInt(document.getElementById('logs-filter-period').value)||0;
+  const userFilter = document.getElementById('logs-filter-user').value;
+
+  let logs = [...accessLogs];
+  if(periodDays > 0){
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - periodDays);
+    logs = logs.filter(l=>new Date(l.accessed_at) >= cutoff);
+  }
+  if(userFilter) logs = logs.filter(l=>l.user_id===userFilter);
+
+  if(!logs.length){
+    el.innerHTML='<div class="empty-state"><p>Nenhum acesso registrado no período</p></div>';
+    return;
+  }
+
+  // Group by user and date
+  const profileMap = masterProfiles.reduce((m,p)=>{m[p.id]=p.full_name||p.id.slice(0,8);return m;},{});
+  const byUser = {};
+  logs.forEach(l=>{
+    const name = profileMap[l.user_id]||l.user_id.slice(0,8);
+    if(!byUser[name]) byUser[name]={count:0, last:null, days:new Set()};
+    byUser[name].count++;
+    const d = l.accessed_at.split('T')[0];
+    byUser[name].days.add(d);
+    if(!byUser[name].last || l.accessed_at > byUser[name].last) byUser[name].last=l.accessed_at;
+  });
+
+  // Summary cards
+  const summaryHtml = Object.entries(byUser)
+    .sort((a,b)=>b[1].count-a[1].count)
+    .map(([name,data])=>{
+      const lastDate = data.last ? new Date(data.last).toLocaleDateString('pt-BR') : '—';
+      const lastTime = data.last ? new Date(data.last).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)">'
+        +'<div style="width:36px;height:36px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0">'+name.charAt(0).toUpperCase()+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="font-size:13px;font-weight:600;color:var(--gray-900)">'+name+'</div>'
+          +'<div style="font-size:11px;color:var(--gray-500)">Último acesso: '+lastDate+' às '+lastTime+'</div>'
+        +'</div>'
+        +'<div style="text-align:right">'
+          +'<div style="font-size:18px;font-weight:700;color:var(--navy)">'+data.count+'</div>'
+          +'<div style="font-size:10px;color:var(--gray-400)">acessos</div>'
+        +'</div>'
+        +'<div style="text-align:right;margin-left:12px">'
+          +'<div style="font-size:18px;font-weight:700;color:var(--green)">'+data.days.size+'</div>'
+          +'<div style="font-size:10px;color:var(--gray-400)">dias únicos</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+
+  // Recent access timeline
+  const recentHtml = logs.slice(0,20).map(l=>{
+    const name = profileMap[l.user_id]||l.user_id.slice(0,8);
+    const dt = new Date(l.accessed_at);
+    const dateStr = dt.toLocaleDateString('pt-BR');
+    const timeStr = dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--gray-50)">'
+      +'<span style="color:var(--gray-400);width:80px;flex-shrink:0">'+dateStr+'</span>'
+      +'<span style="color:var(--gray-400);width:40px;flex-shrink:0">'+timeStr+'</span>'
+      +'<span style="font-weight:500;color:var(--gray-700)">'+name+'</span>'
+      +'</div>';
+  }).join('');
+
+  el.innerHTML = summaryHtml
+    +'<div style="margin-top:1rem;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Histórico recente</div>'
+    + recentHtml;
+}
 async function renderMaster(){
   if(!isMaster) return;
 
@@ -1928,6 +2042,7 @@ async function renderMaster(){
   document.getElementById('master-user-chips').innerHTML = '';
 
   await loadMasterData();
+  await loadAccessLogs();
 
   // ── PERMISSOES ──
   const {data:allProfiles} = await sb.from('profiles')
@@ -1961,8 +2076,8 @@ async function renderMaster(){
     </tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--gray-400)">Nenhum corretor cadastrado</td></tr>';
 
-  // ── STATS ──
-  const ms = document.getElementById('master-stats');
+  // ── LOGS ──
+  await renderAccessLogs();
   const importedSources = [IMP_SOURCE_KEY, IMP_TELEPORT_KEY];
   const corretorContacts = masterContacts.filter(c=>!importedSources.includes(c.source));
   const egsContacts = masterContacts.filter(c=>c.source===IMP_SOURCE_KEY);
@@ -2374,6 +2489,11 @@ async function initApp(user){
   const isSecretaria = userRole === 'secretaria_egs' || userRole === 'secretaria_investseg';
 
   await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns(), loadAnivTemplate()]);
+
+  // Register access log
+  sb.from('access_logs').insert({user_id: user.id}).then(({error})=>{
+    if(error) console.error('Log error:', error);
+  });
 
   // Only show import sources to authorized users
   if(canImportEgs) ensureImportSource();
