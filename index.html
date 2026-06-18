@@ -565,10 +565,14 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             </div>
           </div>
           <div class="funnel-row" id="camp-funil-row"></div>
-          <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
+          <div style="margin-bottom:1rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="search-bar">
               <span style="color:var(--gray-400);font-size:13px">🔍</span>
               <input type="text" id="camp-search" placeholder="Filtrar contatos..." oninput="renderCampKanban()">
+            </div>
+            <div class="chips-row" id="camp-owner-chips" style="margin:0;gap:6px;display:none">
+              <div class="chip active" onclick="setCampOwnerFilter('todos',this)">Todos</div>
+              <div class="chip" onclick="setCampOwnerFilter('meus',this)">👤 Meus</div>
             </div>
             <span style="font-size:12px;color:var(--gray-400)">Arraste os cards para mover entre etapas</span>
           </div>
@@ -2490,6 +2494,12 @@ async function initApp(user){
 
   await Promise.all([loadContacts(), loadUserGroups(), loadCampaigns(), loadAnivTemplate()]);
 
+  // Load profiles map for master (needed for owner badges in kanban)
+  if(isMaster){
+    const {data:profs} = await sb.from('profiles').select('id, full_name');
+    masterProfiles = profs||[];
+  }
+
   // Register access log
   sb.from('access_logs').insert({user_id: user.id}).then(({error})=>{
     if(error) console.error('Log error:', error);
@@ -2561,6 +2571,7 @@ let campStages = {};       // campId -> stages[]
 let campContacts = {};     // campId -> campaign_contacts[]
 let stageTemplates = {};   // stageId -> templates[]
 let activeCampId = null;
+let campOwnerFilter = 'todos'; // 'todos' | 'meus' — master only
 let addContactsFilter = 'todos';
 let selectedContactIds = new Set();
 let msgContact = null;
@@ -2686,11 +2697,36 @@ function backToCampList(){
 }
 
 // ── KANBAN DE CAMPANHA ──
+function buildOwnerBadge(userId){
+  if(userId === currentUser.id){
+    return '<div style="margin-bottom:4px"><span style="font-size:10px;background:var(--gold-light);color:var(--gold);padding:1px 6px;border-radius:99px;font-weight:600">👤 Meu</span></div>';
+  }
+  const profile = masterProfiles.find(p=>p.id===userId);
+  const name = profile?.full_name || 'Corretor';
+  return '<div style="margin-bottom:4px"><span style="font-size:10px;background:var(--gray-100);color:var(--gray-600);padding:1px 6px;border-radius:99px">'+name+'</span></div>';
+}
+
+function setCampOwnerFilter(f, el){
+  campOwnerFilter = f;
+  document.querySelectorAll('#camp-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderCampKanban();
+}
+
 function renderCampKanban(){
   if(!activeCampId) return;
   const stages = campStages[activeCampId]||[];
-  const cc = campContacts[activeCampId]||[];
+  let cc = campContacts[activeCampId]||[];
   const q = (document.getElementById('camp-search')||{value:''}).value.toLowerCase();
+
+  // Show owner filter chips only for master
+  const ownerChips = document.getElementById('camp-owner-chips');
+  if(ownerChips) ownerChips.style.display = isMaster ? '' : 'none';
+
+  // Filter by owner if master selected "Meus"
+  if(isMaster && campOwnerFilter==='meus'){
+    cc = cc.filter(x=>x.user_id===currentUser.id);
+  }
 
   // Counters
   const fr = document.getElementById('camp-funil-row');
@@ -2711,7 +2747,7 @@ function renderCampKanban(){
   const unassigned = cc.filter(x=>!x.stage_id).map(x=>contacts[x.contact_id]).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
 
   board.innerHTML = [
-    {id:'__unassigned__', name:'Sem etapa', color:'#94A3B8'},
+    {id:'__unassigned__', name:'Prospects', color:'#94A3B8'},
     ...stages
   ].map(stage=>{
     const isUnassigned = stage.id==='__unassigned__';
@@ -2737,11 +2773,13 @@ function renderCampKanban(){
         ? '<span style="font-size:10px;background:#fef2f2;color:var(--red);border:1px solid var(--red);padding:1px 6px;border-radius:99px;font-weight:600">❌ Perdido</span>'
         : '';
       const cardBorder = ccFechamento==='ganho' ? 'border-left:3px solid var(--green)' : ccFechamento==='perdido' ? 'border-left:3px solid var(--red);opacity:0.75' : '';
+      const ownerBadge = (isMaster && ccEntry?.user_id) ? buildOwnerBadge(ccEntry.user_id) : '';
       const lembreteIndicator = ccLembrete ? '<span style="font-size:10px;color:'+lemColor+'">🔔 '+fmtDate(ccLembrete)+'</span>' : '';
       return `<div class="kanban-card" draggable="true" data-cid="${c.id}" style="${cardBorder}"
         ondragstart="onCampDragStart(event,'${c.id}')"
         ondragend="onDragEnd(event)">
         <div class="kc-name" title="${c.name}">${c.name}</div>
+        ${ownerBadge}
         ${fechamentoBadge ? `<div style="margin-bottom:4px">${fechamentoBadge}</div>` : ''}
         <div class="kc-meta">
           <span class="score-badge ${sm.cls}" style="font-size:10px">${sm.l}</span>
