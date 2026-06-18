@@ -3797,14 +3797,18 @@ async function processOportImport(){
           if(npRaw && phoneMap[npRaw]) matched = phoneMap[npRaw];
         }
 
-        // Determine owner: if produtor named explicitly, try to match to a profile
+        // Determine owner: prioritize the produtor named in the spreadsheet over the
+        // CRMSeg contact's existing user_id (which is often just whoever did the bulk ERP import)
         let ownerUserId = null;
-        if(matched){
-          ownerUserId = matched.user_id; // existing owner in CRMSeg takes priority
-        }
-        if(!ownerUserId && !isPadrao && produtorRaw){
+        if(!isPadrao && produtorRaw){
           const pid = profileByName[normalizeName(produtorRaw)];
           if(pid) ownerUserId = pid;
+        }
+        if(!ownerUserId && matched && matched.user_id){
+          // Fallback: only use the contact's existing owner if it's NOT the bulk-import default
+          // (heuristic: if produtor field was empty/padrão, the contact's current owner may still be wrong,
+          // so we leave it null/shared in that case too — safer to leave unassigned than guess wrong)
+          if(!isPadrao) ownerUserId = matched.user_id;
         }
         // If still padrão/no owner — leave null, visible to all EGS/Investseg corretores
 
