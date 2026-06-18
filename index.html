@@ -3771,6 +3771,9 @@ async function processOportImport(){
       const {data:profiles} = await sb.from('profiles').select('id, full_name');
       const profileByName = {};
       (profiles||[]).forEach(p=>{ if(p.full_name) profileByName[normalizeName(p.full_name)] = p.id; });
+      console.log('=== DEBUG OPORT IMPORT ===');
+      console.log('Profiles loaded:', profiles?.length, JSON.stringify(profiles));
+      console.log('profileByName:', JSON.stringify(profileByName));
 
       // Create the list
       const {data:newList, error:listErr} = await sb.from('opportunity_lists').insert({
@@ -3780,6 +3783,7 @@ async function processOportImport(){
 
       let encontrados=0, naoEncontrados=0;
       const itemsToInsert = [];
+      let debugCount = 0;
 
       for(const row of rows){
         const rawName = getCol(row,'Cliente','Nome','CLIENTE','NOME');
@@ -3816,6 +3820,11 @@ async function processOportImport(){
         // No fallback to matched.user_id — that field is often just whoever ran the bulk ERP
         // import and is unreliable for attributing real ownership. Leave null (shared) instead
         // of guessing wrong when the produtor name doesn't match any registered profile.
+
+        if(debugCount < 10){
+          console.log('Row:', rawName, '| produtorRaw:', JSON.stringify(produtorRaw), '| isPadrao:', isPadrao, '| ownerUserId:', ownerUserId);
+          debugCount++;
+        }
 
         const extra = {};
         ['Profissão','Idade','Estado Civil','Seguradora (Auto)','Produtos Atuais na Corretora','Cidade'].forEach(k=>{
