@@ -3774,6 +3774,7 @@ async function processOportImport(){
           const v = getCol(row,k);
           if(v) extra[k]=v;
         });
+        if(produtorRaw) extra['Produtor']=produtorRaw;
 
         itemsToInsert.push({
           list_id: newList.id,
@@ -3861,7 +3862,13 @@ function renderOportItems(){
     const c = contacts[item.contact_id];
     const name = c?.name || item.raw_name;
     const phone = c?.phone || item.raw_phone || '';
-    const extraTags = Object.entries(item.extra_data||{}).slice(0,2).map(([k,v])=>
+    const extraEntries = Object.entries(item.extra_data||{});
+    const produtorEntry = extraEntries.find(([k])=>k==='Produtor');
+    const otherEntries = extraEntries.filter(([k])=>k!=='Produtor').slice(0,3);
+    const produtorTag = produtorEntry
+      ? '<span style="font-size:10px;background:var(--gold-light);color:var(--gold);padding:1px 6px;border-radius:99px;font-weight:600">👤 '+produtorEntry[1]+'</span>'
+      : '';
+    const extraTags = produtorTag + ' ' + otherEntries.map(([k,v])=>
       '<span style="font-size:10px;background:var(--gray-100);color:var(--gray-600);padding:1px 6px;border-radius:99px">'+v+'</span>'
     ).join(' ');
     const ownerInfo = item.user_id ? '' : '<span style="font-size:10px;color:var(--gray-400)">· disponível para qualquer corretor</span>';
