@@ -3797,20 +3797,25 @@ async function processOportImport(){
           if(npRaw && phoneMap[npRaw]) matched = phoneMap[npRaw];
         }
 
-        // Determine owner: prioritize the produtor named in the spreadsheet over the
-        // CRMSeg contact's existing user_id (which is often just whoever did the bulk ERP import)
+        // Determine owner: match produtor name from spreadsheet against profiles (partial match,
+        // since spreadsheet names are often longer/different than the short names in profiles)
         let ownerUserId = null;
         if(!isPadrao && produtorRaw){
-          const pid = profileByName[normalizeName(produtorRaw)];
-          if(pid) ownerUserId = pid;
+          const produtorNorm = normalizeName(produtorRaw);
+          const produtorWords = produtorNorm.split(' ').filter(w=>w.length>2);
+          let bestMatch = null, bestScore = 0;
+          Object.entries(profileByName).forEach(([profName, pid])=>{
+            const profWords = profName.split(' ').filter(w=>w.length>2);
+            const matchCount = profWords.filter(w=>produtorWords.includes(w)).length;
+            if(matchCount>0 && matchCount===profWords.length && matchCount>bestScore){
+              bestScore = matchCount; bestMatch = pid;
+            }
+          });
+          if(bestMatch) ownerUserId = bestMatch;
         }
-        if(!ownerUserId && matched && matched.user_id){
-          // Fallback: only use the contact's existing owner if it's NOT the bulk-import default
-          // (heuristic: if produtor field was empty/padrão, the contact's current owner may still be wrong,
-          // so we leave it null/shared in that case too — safer to leave unassigned than guess wrong)
-          if(!isPadrao) ownerUserId = matched.user_id;
-        }
-        // If still padrão/no owner — leave null, visible to all EGS/Investseg corretores
+        // No fallback to matched.user_id — that field is often just whoever ran the bulk ERP
+        // import and is unreliable for attributing real ownership. Leave null (shared) instead
+        // of guessing wrong when the produtor name doesn't match any registered profile.
 
         const extra = {};
         ['Profissão','Idade','Estado Civil','Seguradora (Auto)','Produtos Atuais na Corretora','Cidade'].forEach(k=>{
