@@ -3662,7 +3662,16 @@ function setOportOwnerFilter(f, el){
 
 async function loadOportLists(){
   const {data} = await sb.from('opportunity_lists').select('*').order('created_at',{ascending:false});
-  oportLists = data||[];
+  let all = data||[];
+  // Filter lists by the corretor's base permissions (master sees all)
+  if(!isMaster){
+    all = all.filter(l=>{
+      if(l.source_label==='egs') return canImportEgs;
+      if(l.source_label==='investseg') return canImportTeleport;
+      return false;
+    });
+  }
+  oportLists = all;
 }
 
 async function loadOportItems(listId){
