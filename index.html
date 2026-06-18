@@ -677,10 +677,14 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
             </div>
           </div>
           <div class="stats-row" id="oport-detail-stats" style="margin-bottom:1rem"></div>
-          <div style="margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
             <div class="search-bar" style="max-width:300px">
               <span style="color:var(--gray-400);font-size:13px">🔍</span>
               <input type="text" id="oport-search" placeholder="Buscar contato..." oninput="renderOportItems()">
+            </div>
+            <div class="chips-row" id="oport-owner-chips" style="margin:0;gap:6px;display:none">
+              <div class="chip active" onclick="setOportOwnerFilter('todos',this)">Todos</div>
+              <div class="chip" onclick="setOportOwnerFilter('meus',this)">👤 Meus</div>
             </div>
           </div>
           <div id="oport-items-list" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3647,6 +3651,14 @@ async function confirmarFechamento(){
 let oportLists = [];
 let oportItems = {}; // listId -> items[]
 let activeOportListId = null;
+let oportOwnerFilter = 'todos'; // 'todos' | 'meus' — master only
+
+function setOportOwnerFilter(f, el){
+  oportOwnerFilter = f;
+  document.querySelectorAll('#oport-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderOportItems();
+}
 
 async function loadOportLists(){
   const {data} = await sb.from('opportunity_lists').select('*').order('created_at',{ascending:false});
@@ -3851,6 +3863,10 @@ async function openOportDetail(listId){
   document.getElementById('oport-detail-title').textContent = list.name;
   document.getElementById('oport-detail-sub').textContent = (list.source_label==='investseg'?'Investseg':'EGS') + ' · Importada em '+new Date(list.created_at).toLocaleDateString('pt-BR');
   document.getElementById('oport-search').value='';
+  oportOwnerFilter='todos';
+  document.querySelectorAll('#oport-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  const firstChip = document.querySelector('#oport-owner-chips .chip');
+  if(firstChip) firstChip.classList.add('active');
   await loadOportItems(listId);
   renderOportItems();
 }
@@ -3865,6 +3881,15 @@ function renderOportItems(){
   if(!activeOportListId) return;
   let items = oportItems[activeOportListId]||[];
   const q = document.getElementById('oport-search').value.toLowerCase();
+
+  // Show owner filter chips only for master
+  const ownerChips = document.getElementById('oport-owner-chips');
+  if(ownerChips) ownerChips.style.display = isMaster ? '' : 'none';
+
+  // Filter by owner if master selected "Meus"
+  if(isMaster && oportOwnerFilter==='meus'){
+    items = items.filter(x=>x.user_id===currentUser.id);
+  }
 
   // Stats
   const matched = items.filter(x=>x.matched);
