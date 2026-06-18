@@ -493,9 +493,13 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 
         <!-- AGENDA -->
         <div class="card" style="margin-bottom:1.25rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
             <div style="font-size:14px;font-weight:600;color:var(--gray-800)">🔔 Agenda — lembretes de hoje</div>
             <button class="btn btn-secondary btn-sm" onclick="goTo('lembretes',document.querySelector('[onclick*=lembretes]'))">Ver todos</button>
+          </div>
+          <div id="ds-lembrete-owner-chips" style="display:none;margin-bottom:0.5rem">
+            <span class="chip" id="ds-lem-chip-todos" onclick="setDsLembreteOwner('todos',this)" style="font-size:11px;padding:2px 8px">👥 Todos</span>
+            <span class="chip" id="ds-lem-chip-meus" onclick="setDsLembreteOwner('meus',this)" style="font-size:11px;padding:2px 8px">👤 Meus</span>
           </div>
           <div id="ds-lembretes-hoje"></div>
         </div>
@@ -702,6 +706,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <div class="chip" onclick="setLembreteFilter('vencidos',this)">Vencidos</div>
           <div class="chip" onclick="setLembreteFilter('hoje',this)">Hoje</div>
           <div class="chip" onclick="setLembreteFilter('proximos',this)">Próximos 7 dias</div>
+        </div>
+        <div id="lembrete-owner-chips" class="chips-row" style="display:none;margin-top:4px">
+          <div class="chip active" onclick="setLembreteOwnerFilter('todos',this)">👥 Todos</div>
+          <div class="chip" onclick="setLembreteOwnerFilter('meus',this)">👤 Meus</div>
         </div>
         <div id="lembretes-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
@@ -1506,6 +1514,7 @@ let contacts = {};
 let activeSrc = SOURCES[0].key;
 let funilFilter = 'todos';
 let lembreteFilter = 'todos';
+let lembreteOwnerFilter = 'todos'; // 'todos' | 'meus' — master only
 let editId = null;
 let currentUser = null;
 let isMaster = false;
@@ -1834,7 +1843,16 @@ function renderDashboard(){
       if(c) campLem.push({name:c.name, note:camp?.name||'Campanha', lembrete:x.lembrete, tipo:'campanha', ccId:x.id, campId, id:c.id});
     });
   });
-  const allLem = [...geralLem,...campLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete)).slice(0,6);
+  // Show owner chips for master in dashboard
+  const dsOwnerChips = document.getElementById('ds-lembrete-owner-chips');
+  if(dsOwnerChips) dsOwnerChips.style.display = isMaster ? '' : 'none';
+
+  let allLemRaw = [...geralLem,...campLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
+  // Apply owner filter for master
+  if(isMaster && dsLembreteOwnerFilter==='meus'){
+    allLemRaw = allLemRaw.filter(c=>contacts[c.id]?.user_id===currentUser.id);
+  }
+  const allLem = allLemRaw.slice(0,6);
   const lh = document.getElementById('ds-lembretes-hoje');
   if(!allLem.length){
     lh.innerHTML='<div class="empty-state"><p>Nenhum lembrete para hoje 🎉</p></div>';
@@ -2379,6 +2397,16 @@ function renderLembretes(){
   });
 
   let all = [...geralItems, ...campItems];
+
+  // Show owner filter chips only for master
+  const ownerChipsEl = document.getElementById('lembrete-owner-chips');
+  if(ownerChipsEl) ownerChipsEl.style.display = isMaster ? '' : 'none';
+
+  // Apply owner filter for master
+  if(isMaster && lembreteOwnerFilter==='meus'){
+    all = all.filter(c=>contacts[c.id]?.user_id===currentUser.id);
+  }
+
   if(lembreteFilter==='vencidos') all=all.filter(c=>c.lembrete<tod);
   else if(lembreteFilter==='hoje') all=all.filter(c=>c.lembrete===tod);
   else if(lembreteFilter==='proximos') all=all.filter(c=>c.lembrete>tod&&c.lembrete<=fut7s);
@@ -2461,7 +2489,26 @@ async function loadAllCampContactsForAgenda(){
   }
 }
 
-function setLembreteFilter(f,el){ lembreteFilter=f; document.querySelectorAll('.chips-row .chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); renderLembretes(); }
+function setLembreteFilter(f,el){
+  lembreteFilter=f;
+  // Only deactivate chips in the same row as the clicked chip
+  el.closest('.chips-row').querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderLembretes();
+}
+function setLembreteOwnerFilter(f,el){
+  lembreteOwnerFilter=f;
+  document.querySelectorAll('#lembrete-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderLembretes();
+}
+let dsLembreteOwnerFilter = 'todos';
+function setDsLembreteOwner(f,el){
+  dsLembreteOwnerFilter=f;
+  document.querySelectorAll('#ds-lembrete-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderDashboard();
+}
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function openModal(srcKey, id){
