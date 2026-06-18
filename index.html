@@ -404,6 +404,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <span class="icon">🚀</span> Campanhas
         <span id="camp-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
       </div>
+      <div class="nav-item" id="nav-oportunidades" onclick="goTo('oportunidades',this)">
+        <span class="icon">📋</span> Oportunidades
+        <span id="oport-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
+      </div>
       <div class="nav-item" id="nav-aniversarios" onclick="goTo('aniversarios',this)">
         <span class="icon">🎂</span> Aniversários
         <span id="aniv-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
@@ -649,6 +653,38 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 
         <!-- Lista -->
         <div id="aniv-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+
+      <!-- OPORTUNIDADES -->
+      <div id="view-oportunidades" class="view">
+        <div id="oport-list-view">
+          <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <h1>Oportunidades</h1>
+              <p>Listas de leads para cross-sell e novas vendas</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="oport-novo-btn" onclick="openOportImportModal()" style="display:none">+ Nova lista</button>
+          </div>
+          <div id="oport-lists-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
+        </div>
+
+        <div id="oport-detail-view" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
+            <button class="btn btn-secondary btn-sm" onclick="backToOportList()">← Oportunidades</button>
+            <div>
+              <h1 style="font-size:20px;font-weight:600;color:var(--gray-900)" id="oport-detail-title"></h1>
+              <p style="font-size:13px;color:var(--gray-500)" id="oport-detail-sub"></p>
+            </div>
+          </div>
+          <div class="stats-row" id="oport-detail-stats" style="margin-bottom:1rem"></div>
+          <div style="margin-bottom:1rem">
+            <div class="search-bar" style="max-width:300px">
+              <span style="color:var(--gray-400);font-size:13px">🔍</span>
+              <input type="text" id="oport-search" placeholder="Buscar contato..." oninput="renderOportItems()">
+            </div>
+          </div>
+          <div id="oport-items-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
       </div>
 
       <!-- LEMBRETES -->
@@ -1087,6 +1123,68 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeFechamentoModal()">Cancelar</button>
       <button class="btn btn-primary" id="fechamento-btn-confirmar" onclick="confirmarFechamento()" disabled>Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR OPORTUNIDADE -->
+<div class="modal-overlay" id="oport-import-modal" onclick="if(event.target===this)closeOportImportModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📋 Nova lista de oportunidades</h2>
+      <button class="close-btn" onclick="closeOportImportModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome da lista *</label>
+        <input type="text" id="oport-list-name" placeholder="Ex: Residencial, Proteção de Renda...">
+      </div>
+      <div class="form-group">
+        <label>Empresa</label>
+        <select id="oport-list-empresa">
+          <option value="egs">EGS</option>
+          <option value="investseg">Investseg</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Arquivo (.xlsx)</label>
+        <input type="file" id="oport-file-input" accept=".xlsx,.xls">
+      </div>
+      <div class="tip-box">
+        O sistema vai cruzar os contatos da planilha com a base já importada (por CPF, ou por nome + telefone quando não houver CPF) e identificar o corretor responsável automaticamente quando possível.
+      </div>
+      <div id="oport-import-progress" style="display:none;margin-top:1rem">
+        <div class="stats-row">
+          <div class="stat-card accent-a"><div class="stat-value" id="oport-imp-encontrados">0</div><div class="stat-label">Encontrados na base</div></div>
+          <div class="stat-card"><div class="stat-value" id="oport-imp-naoencontrados">0</div><div class="stat-label">Não encontrados</div></div>
+          <div class="stat-card accent-navy"><div class="stat-value" id="oport-imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeOportImportModal()">Cancelar</button>
+      <button class="btn btn-primary" id="oport-import-btn" onclick="processOportImport()">Processar lista</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADICIONAR A CAMPANHA (OPORTUNIDADE) -->
+<div class="modal-overlay" id="oport-add-camp-modal" onclick="if(event.target===this)closeOportAddCampModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h2>Adicionar à campanha</h2>
+      <button class="close-btn" onclick="closeOportAddCampModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:1rem">Contato: <strong id="oport-add-camp-name"></strong></div>
+      <div class="form-group">
+        <label>Campanha</label>
+        <select id="oport-add-camp-select"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeOportAddCampModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmOportAddCamp()">Adicionar</button>
     </div>
   </div>
 </div>
@@ -1681,13 +1779,14 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
+  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', oportunidades:'Oportunidades', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard'){ 
     loadCampaigns().then(()=>renderDashboard()); 
   }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
+  if(view==='oportunidades'){ loadOportLists().then(()=>{ backToOportList(); renderOportListsGrid(); }); }
   if(view==='aniversarios'){
     // Hide source filter for secretárias (their source is fixed)
     const isSecretaria = anivSource === IMP_SOURCE_KEY || anivSource === IMP_TELEPORT_KEY;
@@ -3542,6 +3641,284 @@ async function confirmarFechamento(){
   closeFechamentoModal();
   renderCampKanban();
   updateBadges();
+}
+
+// ─── OPORTUNIDADES ───────────────────────────────────────────────────────────
+let oportLists = [];
+let oportItems = {}; // listId -> items[]
+let activeOportListId = null;
+
+async function loadOportLists(){
+  const {data} = await sb.from('opportunity_lists').select('*').order('created_at',{ascending:false});
+  oportLists = data||[];
+}
+
+async function loadOportItems(listId){
+  let query = sb.from('opportunity_items').select('*').eq('list_id',listId);
+  if(!isMaster) query = query.or('user_id.eq.'+currentUser.id+',user_id.is.null');
+  const {data} = await query;
+  oportItems[listId] = data||[];
+  // Load missing contacts
+  const missingIds = (data||[]).map(x=>x.contact_id).filter(id=>id && !contacts[id]);
+  if(missingIds.length){
+    const {data:extra} = await sb.from('contacts').select('*').in('id',missingIds);
+    (extra||[]).forEach(c=>{ contacts[c.id]=dbToLocal(c); });
+  }
+}
+
+function renderOportListsGrid(){
+  document.getElementById('oport-novo-btn').style.display = isMaster ? '' : 'none';
+  const el = document.getElementById('oport-lists-grid');
+  if(!oportLists.length){
+    el.innerHTML = '<div class="empty-state"><div class="es-icon">📋</div><p>Nenhuma lista de oportunidades ainda</p></div>';
+    return;
+  }
+  el.innerHTML = oportLists.map(l=>{
+    const empresaBadge = l.source_label==='investseg'
+      ? '<span style="font-size:10px;background:var(--navy-light);color:var(--navy);padding:1px 6px;border-radius:99px">Investseg</span>'
+      : '<span style="font-size:10px;background:var(--gold-light);color:var(--gold);padding:1px 6px;border-radius:99px">EGS</span>';
+    const dateStr = new Date(l.created_at).toLocaleDateString('pt-BR');
+    return '<div class="card" style="cursor:pointer" onclick="openOportDetail(\''+l.id+'\')">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+        +'<div style="font-size:15px;font-weight:600;color:var(--gray-900)">'+l.name+'</div>'
+        +empresaBadge
+      +'</div>'
+      +'<div style="font-size:12px;color:var(--gray-400)">Importada em '+dateStr+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function openOportImportModal(){
+  document.getElementById('oport-list-name').value='';
+  document.getElementById('oport-file-input').value='';
+  document.getElementById('oport-import-progress').style.display='none';
+  document.getElementById('oport-import-modal').classList.add('open');
+}
+function closeOportImportModal(){
+  document.getElementById('oport-import-modal').classList.remove('open');
+}
+
+function normalizePhone(p){ return (p||'').replace(/\D/g,'').slice(-8); } // last 8 digits for matching
+function normalizeName(n){ return (n||'').toUpperCase().trim().replace(/\s+/g,' '); }
+
+async function processOportImport(){
+  const name = document.getElementById('oport-list-name').value.trim();
+  const empresa = document.getElementById('oport-list-empresa').value;
+  const file = document.getElementById('oport-file-input').files[0];
+  if(!name){ showToast('Informe o nome da lista'); return; }
+  if(!file){ showToast('Selecione um arquivo'); return; }
+
+  const btn = document.getElementById('oport-import-btn');
+  btn.textContent='Processando...'; btn.disabled=true;
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      // Build matching maps from ALL contacts in this empresa's source (need broader access for master)
+      const sourceKey = empresa==='investseg' ? IMP_TELEPORT_KEY : IMP_SOURCE_KEY;
+      const {data:baseContacts} = await sb.from('contacts').select('id,name,phone,cpf_cnpj,user_id').eq('source',sourceKey);
+      const cpfMap={}, phoneMap={};
+      (baseContacts||[]).forEach(c=>{
+        if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c;
+        const np = normalizePhone(c.phone);
+        if(np) phoneMap[np] = c;
+      });
+
+      // Load profiles for produtor name matching
+      const {data:profiles} = await sb.from('profiles').select('id, full_name');
+      const profileByName = {};
+      (profiles||[]).forEach(p=>{ if(p.full_name) profileByName[normalizeName(p.full_name)] = p.id; });
+
+      // Create the list
+      const {data:newList, error:listErr} = await sb.from('opportunity_lists').insert({
+        name, source_label: empresa, created_by: currentUser.id
+      }).select().single();
+      if(listErr){ showToast('Erro: '+listErr.message); btn.textContent='Processar lista'; btn.disabled=false; return; }
+
+      let encontrados=0, naoEncontrados=0;
+      const itemsToInsert = [];
+
+      for(const row of rows){
+        const rawName = getCol(row,'Cliente','Nome','CLIENTE','NOME');
+        if(!rawName) continue;
+        const rawPhone = getCol(row,'Telefone 1','Telefone Celular','Celular','Telefone');
+        const rawCpf = getCol(row,'CPF/CNPJ','CPF','CNPJ');
+        const produtorRaw = getCol(row,'Produtor','PRODUTOR');
+        const isPadrao = !produtorRaw || produtorRaw.toUpperCase().includes('PADRÃO') || produtorRaw.toUpperCase().includes('PADRAO');
+
+        let matched = null;
+        const cpfClean = rawCpf.replace(/\D/g,'');
+        if(cpfClean && cpfMap[cpfClean]) matched = cpfMap[cpfClean];
+        if(!matched){
+          const npRaw = normalizePhone(rawPhone);
+          if(npRaw && phoneMap[npRaw]) matched = phoneMap[npRaw];
+        }
+
+        // Determine owner: if produtor named explicitly, try to match to a profile
+        let ownerUserId = null;
+        if(matched){
+          ownerUserId = matched.user_id; // existing owner in CRMSeg takes priority
+        }
+        if(!ownerUserId && !isPadrao && produtorRaw){
+          const pid = profileByName[normalizeName(produtorRaw)];
+          if(pid) ownerUserId = pid;
+        }
+        // If still padrão/no owner — leave null, visible to all EGS/Investseg corretores
+
+        const extra = {};
+        ['Profissão','Idade','Estado Civil','Seguradora (Auto)','Produtos Atuais na Corretora','Cidade'].forEach(k=>{
+          const v = getCol(row,k);
+          if(v) extra[k]=v;
+        });
+
+        itemsToInsert.push({
+          list_id: newList.id,
+          contact_id: matched?.id||null,
+          user_id: ownerUserId,
+          raw_name: rawName,
+          raw_phone: rawPhone||null,
+          raw_cpf: rawCpf||null,
+          extra_data: extra,
+          matched: !!matched,
+        });
+
+        if(matched) encontrados++; else naoEncontrados++;
+      }
+
+      // Batch insert
+      const BATCH=100;
+      for(let i=0;i<itemsToInsert.length;i+=BATCH){
+        await sb.from('opportunity_items').insert(itemsToInsert.slice(i,i+BATCH));
+      }
+
+      document.getElementById('oport-imp-encontrados').textContent=encontrados;
+      document.getElementById('oport-imp-naoencontrados').textContent=naoEncontrados;
+      document.getElementById('oport-imp-total').textContent=rows.length;
+      document.getElementById('oport-import-progress').style.display='';
+
+      btn.textContent='Processar lista'; btn.disabled=false;
+      showToast('Lista "'+name+'" criada com '+encontrados+' contatos encontrados');
+      await loadOportLists();
+      renderOportListsGrid();
+      setTimeout(()=>{ closeOportImportModal(); openOportDetail(newList.id); }, 1200);
+
+    } catch(err){
+      showToast('Erro: '+err.message); console.error(err);
+      btn.textContent='Processar lista'; btn.disabled=false;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function openOportDetail(listId){
+  activeOportListId = listId;
+  const list = oportLists.find(l=>l.id===listId);
+  if(!list) return;
+  document.getElementById('oport-list-view').style.display='none';
+  document.getElementById('oport-detail-view').style.display='';
+  document.getElementById('oport-detail-title').textContent = list.name;
+  document.getElementById('oport-detail-sub').textContent = (list.source_label==='investseg'?'Investseg':'EGS') + ' · Importada em '+new Date(list.created_at).toLocaleDateString('pt-BR');
+  document.getElementById('oport-search').value='';
+  await loadOportItems(listId);
+  renderOportItems();
+}
+
+function backToOportList(){
+  document.getElementById('oport-list-view').style.display='';
+  document.getElementById('oport-detail-view').style.display='none';
+  activeOportListId=null;
+}
+
+function renderOportItems(){
+  if(!activeOportListId) return;
+  let items = oportItems[activeOportListId]||[];
+  const q = document.getElementById('oport-search').value.toLowerCase();
+
+  // Stats
+  const matched = items.filter(x=>x.matched);
+  const added = items.filter(x=>x.added_to_campaign);
+  const statsEl = document.getElementById('oport-detail-stats');
+  statsEl.innerHTML =
+    '<div class="stat-card accent-navy"><div class="stat-value">'+items.length+'</div><div class="stat-label">Total na lista</div></div>'
+    +'<div class="stat-card accent-a"><div class="stat-value">'+matched.length+'</div><div class="stat-label">Encontrados na base</div></div>'
+    +'<div class="stat-card"><div class="stat-value">'+added.length+'</div><div class="stat-label">Já no funil</div></div>';
+
+  // Only show matched contacts (those found in base) — these are actionable
+  let list = matched;
+  if(q) list = list.filter(x=>(x.raw_name||'').toLowerCase().includes(q));
+
+  const el = document.getElementById('oport-items-list');
+  if(!list.length){
+    el.innerHTML = '<div class="empty-state"><p>Nenhum contato encontrado</p></div>';
+    return;
+  }
+
+  el.innerHTML = list.map(item=>{
+    const c = contacts[item.contact_id];
+    const name = c?.name || item.raw_name;
+    const phone = c?.phone || item.raw_phone || '';
+    const extraTags = Object.entries(item.extra_data||{}).slice(0,2).map(([k,v])=>
+      '<span style="font-size:10px;background:var(--gray-100);color:var(--gray-600);padding:1px 6px;border-radius:99px">'+v+'</span>'
+    ).join(' ');
+    const ownerInfo = item.user_id ? '' : '<span style="font-size:10px;color:var(--gray-400)">· disponível para qualquer corretor</span>';
+    const actionBtn = item.added_to_campaign
+      ? '<span style="font-size:11px;background:#f0fdf4;color:var(--green);border:1px solid var(--green);padding:4px 10px;border-radius:99px;font-weight:600">✓ Já no funil</span>'
+      : '<button class="btn btn-sm btn-primary" onclick="openOportAddCampModal(\''+item.id+'\',\''+(c?.id||'')+'\',\''+name.replace(/'/g,"\\'")+'\')">+ Adicionar à campanha</button>';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--gray-200);border-radius:var(--radius-sm);background:#fff">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:500">'+name+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-500);margin-top:2px">'+phone+' '+ownerInfo+'</div>'
+        +(extraTags?'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">'+extraTags+'</div>':'')
+      +'</div>'
+      +actionBtn
+      +'</div>';
+  }).join('');
+}
+
+let oportAddCampItemId=null, oportAddCampContactId=null;
+function openOportAddCampModal(itemId, contactId, name){
+  if(!contactId){ showToast('Contato não vinculado'); return; }
+  oportAddCampItemId=itemId; oportAddCampContactId=contactId;
+  document.getElementById('oport-add-camp-name').textContent = name;
+  const sel = document.getElementById('oport-add-camp-select');
+  sel.innerHTML = campaigns.filter(c=>c.is_active).map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  document.getElementById('oport-add-camp-modal').classList.add('open');
+}
+function closeOportAddCampModal(){
+  document.getElementById('oport-add-camp-modal').classList.remove('open');
+  oportAddCampItemId=null; oportAddCampContactId=null;
+}
+
+async function confirmOportAddCamp(){
+  const campId = document.getElementById('oport-add-camp-select').value;
+  if(!campId || !oportAddCampContactId) return;
+  const list = oportLists.find(l=>l.id===activeOportListId);
+
+  // Add to campaign_contacts
+  const {error} = await sb.from('campaign_contacts').insert({
+    campaign_id: campId,
+    contact_id: oportAddCampContactId,
+    user_id: currentUser.id,
+    obs: 'Via lista Oportunidades: '+(list?.name||'')
+  });
+  if(error){ showToast('Erro: '+error.message); return; }
+
+  // Mark item as added + assign owner if not yet owned
+  await sb.from('opportunity_items').update({
+    added_to_campaign:true, added_campaign_id:campId, user_id: currentUser.id
+  }).eq('id', oportAddCampItemId);
+
+  // Update local cache
+  const item = (oportItems[activeOportListId]||[]).find(x=>x.id===oportAddCampItemId);
+  if(item){ item.added_to_campaign=true; item.user_id=currentUser.id; }
+
+  showToast('Adicionado à campanha ✓');
+  closeOportAddCampModal();
+  renderOportItems();
 }
 
 async function handleDatasFile(file){
