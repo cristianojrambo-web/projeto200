@@ -3810,9 +3810,15 @@ async function processOportImport(){
           let bestMatch = null, bestScore = 0;
           Object.entries(profileByName).forEach(([profName, pid])=>{
             const profWords = profName.split(' ').filter(w=>w.length>2);
+            // Strategy 1: all profile words appear in produtor (handles "Adriano Rambo" vs "Adriano Alberto Rambo")
             const matchCount = profWords.filter(w=>produtorWords.includes(w)).length;
             if(matchCount>0 && matchCount===profWords.length && matchCount>bestScore){
               bestScore = matchCount; bestMatch = pid;
+            }
+            // Strategy 2: produtor is a single first name that matches the first word of the profile
+            // (handles EGS short names: "CRISTIANO" vs profile "CRISTIANO RAMBO")
+            if(produtorWords.length===1 && profWords.length>0 && produtorWords[0]===profWords[0] && bestScore===0){
+              bestMatch = pid;
             }
           });
           if(bestMatch) ownerUserId = bestMatch;
