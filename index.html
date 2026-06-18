@@ -3886,9 +3886,12 @@ function renderOportItems(){
   const ownerChips = document.getElementById('oport-owner-chips');
   if(ownerChips) ownerChips.style.display = isMaster ? '' : 'none';
 
-  // Filter by owner if master selected "Meus"
+  // Filter by owner if master selected "Meus" — strictly own items, not unassigned
   if(isMaster && oportOwnerFilter==='meus'){
     items = items.filter(x=>x.user_id===currentUser.id);
+  } else if(!isMaster){
+    // Non-master already loaded only their own + unassigned via query, but double-check here
+    items = items.filter(x=>x.user_id===currentUser.id || !x.user_id);
   }
 
   // Stats
