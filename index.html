@@ -3715,7 +3715,34 @@ async function processOportImport(){
   reader.onload = async e => {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      // Pick the best sheet: prefer "PF" named sheets, skip "Resumo", else use the one with most rows
+      let bestSheetName = wb.SheetNames[0];
+      let bestRowCount = 0;
+      const pfSheet = wb.SheetNames.find(sn=>sn.toUpperCase().includes('PF'));
+      if(pfSheet){
+        bestSheetName = pfSheet;
+      } else {
+        wb.SheetNames.forEach(sn=>{
+          if(sn.toLowerCase().includes('resumo')) return;
+          const ws2 = wb.Sheets[sn];
+          const range = XLSX.utils.decode_range(ws2['!ref']||'A1:A1');
+          const rowCount = range.e.r - range.s.r;
+          if(rowCount > bestRowCount){ bestRowCount = rowCount; bestSheetName = sn; }
+        });
+      }
+      const ws = wb.Sheets[bestSheetName];
+      // Auto-detect header row: some sheets have title rows before the actual header
+      const range0 = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+      const allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      let headerRowIdx = 0;
+      for(let i=0; i<Math.min(10, allRows.length); i++){
+        const rowVals = allRows[i].map(v=>String(v).toUpperCase());
+        if(rowVals.some(v=>v==='CLIENTE'||v==='NOME')){ headerRowIdx = i; break; }
+      }
+      if(headerRowIdx > 0){
+        range0.s.r = headerRowIdx;
+        ws['!ref'] = XLSX.utils.encode_range(range0);
+      }
       const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
 
       // Build matching maps from ALL contacts in this empresa's source (need broader access for master)
