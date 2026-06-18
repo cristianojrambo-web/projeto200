@@ -1840,7 +1840,7 @@ function renderDashboard(){
     const camp = campaigns.find(x=>x.id===campId);
     ccList.filter(x=>x.lembrete&&x.lembrete<=tod).forEach(x=>{
       const c = contacts[x.contact_id];
-      if(c) campLem.push({name:c.name, note:camp?.name||'Campanha', lembrete:x.lembrete, tipo:'campanha', ccId:x.id, campId, id:c.id});
+      if(c) campLem.push({name:c.name, note:camp?.name||'Campanha', lembrete:x.lembrete, tipo:'campanha', ccId:x.id, campId, id:c.id, ccOwnerId:x.user_id});
     });
   });
   // Show owner chips for master in dashboard
@@ -1848,9 +1848,9 @@ function renderDashboard(){
   if(dsOwnerChips) dsOwnerChips.style.display = isMaster ? '' : 'none';
 
   let allLemRaw = [...geralLem,...campLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
-  // Apply owner filter for master
+  // Apply owner filter for master — campLem uses ccId.user_id, geralLem uses contact.user_id
   if(isMaster && dsLembreteOwnerFilter==='meus'){
-    allLemRaw = allLemRaw.filter(c=>contacts[c.id]?.user_id===currentUser.id);
+    allLemRaw = allLemRaw.filter(c=> c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id);
   }
   const allLem = allLemRaw.slice(0,6);
   const lh = document.getElementById('ds-lembretes-hoje');
@@ -2391,7 +2391,7 @@ function renderLembretes(){
         id: c.id, name: c.name, lembrete: x.lembrete,
         note: x.obs||camp?.name||'Campanha', score: calcScore(c),
         status: c.status||'novo', tipo: 'campanha', ccId: x.id,
-        campId, campName: camp?.name||'Campanha'
+        campId, campName: camp?.name||'Campanha', ccOwnerId: x.user_id
       });
     });
   });
@@ -2402,9 +2402,10 @@ function renderLembretes(){
   const ownerChipsEl = document.getElementById('lembrete-owner-chips');
   if(ownerChipsEl) ownerChipsEl.style.display = isMaster ? '' : 'none';
 
-  // Apply owner filter for master
+  // Apply owner filter for master — use ccOwnerId (campaign_contact.user_id) for camp items,
+  // and contact.user_id for geral items
   if(isMaster && lembreteOwnerFilter==='meus'){
-    all = all.filter(c=>contacts[c.id]?.user_id===currentUser.id);
+    all = all.filter(c=> c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id);
   }
 
   if(lembreteFilter==='vencidos') all=all.filter(c=>c.lembrete<tod);
