@@ -3939,6 +3939,12 @@ function renderOportItems(){
   // Only show matched contacts (those found in base) — these are actionable
   let list = matched;
   if(q) list = list.filter(x=>(x.raw_name||'').toLowerCase().includes(q));
+  // Sort: own items first, then unassigned (PADRÃO) at the end
+  list.sort((a,b)=>{
+    const aOwn = a.user_id===currentUser.id ? 0 : 1;
+    const bOwn = b.user_id===currentUser.id ? 0 : 1;
+    return aOwn - bOwn;
+  });
 
   const el = document.getElementById('oport-items-list');
   if(!list.length){
