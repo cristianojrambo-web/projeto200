@@ -1786,7 +1786,7 @@ function goTo(view, el){
   const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', oportunidades:'Oportunidades', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard'){ 
-    loadCampaigns().then(()=>renderDashboard()); 
+    Promise.all([loadCampaigns(), loadAllCampContactsForAgenda()]).then(()=>renderDashboard()); 
   }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
@@ -2642,8 +2642,11 @@ async function initApp(user){
   document.getElementById('app-loading').style.display='none';
   document.getElementById('app-shell').style.display='flex';
 
-  renderDashboard();
-  updateBadges();
+  // Load campContacts before rendering dashboard so agenda shows correctly on first load
+  Promise.all([loadCampaigns(), loadAllCampContactsForAgenda()]).then(()=>{
+    renderDashboard();
+    updateBadges();
+  });
 }
 
 // Check existing session on page load
