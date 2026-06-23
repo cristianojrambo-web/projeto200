@@ -1216,6 +1216,7 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <div class="stat-card accent-a"><div class="stat-value" id="renov-imp-novos">0</div><div class="stat-label">Novas</div></div>
           <div class="stat-card accent-b"><div class="stat-value" id="renov-imp-dup">0</div><div class="stat-label">Já existiam</div></div>
           <div class="stat-card"><div class="stat-value" id="renov-imp-naocontato">0</div><div class="stat-label">Sem contato vinculado</div></div>
+          <div class="stat-card accent-b"><div class="stat-value" id="renov-imp-revisar">0</div><div class="stat-label">⚠️ Revisar responsável</div></div>
           <div class="stat-card accent-navy"><div class="stat-value" id="renov-imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
         </div>
       </div>
@@ -3024,10 +3025,14 @@ function renderCampKanban(){
         const linha1 = parts.join(' · ');
         const premiumTxt = rd.premium ? 'R$ '+Number(rd.premium).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
         const vigTxt = rd.end_date ? 'Venc. '+fmtDate(rd.end_date) : '';
+        const reviewBadge = rd.needsReview
+          ? '<div style="font-size:10px;background:#fffbeb;color:var(--amber);border:1px solid var(--amber);padding:2px 6px;border-radius:99px;font-weight:600;display:inline-block;margin-top:4px">⚠️ Revisar responsável</div>'
+          : '';
         renovInfo = '<div style="font-size:11px;color:var(--gray-600);margin-top:4px;line-height:1.4">'
           + (ccEntry?.policy_number ? '📄 Apólice '+ccEntry.policy_number+'<br>' : '')
           + (linha1 ? linha1+'<br>' : '')
           + [premiumTxt, vigTxt].filter(Boolean).join(' · ')
+          + reviewBadge
           + '</div>';
       }
       return `<div class="kanban-card" draggable="true" data-cid="${c.id}" data-ccid="${ccId}" style="${cardBorder}"
@@ -4165,7 +4170,7 @@ async function processRenovImport(){
       const profileByName = {};
       (profiles||[]).forEach(p=>{ if(p.full_name) profileByName[normalizeName(p.full_name)] = p.id; });
 
-      let novos=0, dup=0, naoContato=0;
+      let novos=0, dup=0, naoContato=0, precisaRevisar=0;
       const ccToInsert = [];
       const newContactsByPolicy = []; // {policy, ownerUserId, p} for rows needing a fresh contact
 
@@ -4196,12 +4201,17 @@ async function processRenovImport(){
           });
           if(bestMatch) ownerUserId = bestMatch;
         }
+        // Renovações requires a non-null owner (unlike Oportunidades' shared PADRÃO pool).
+        // When no corretor could be matched, fall back to the importing master and flag for review.
+        const needsReview = !ownerUserId;
+        if(needsReview) ownerUserId = currentUser.id;
 
         const extra = {
           insurer: p.insurer||null, product: p.product||null,
           start_date: p.startDate||null, end_date: p.endDate||null,
-          premium: p.premium, empresa
+          premium: p.premium, empresa, needsReview
         };
+        if(needsReview) precisaRevisar++;
 
         if(matched){
           novos++;
@@ -4251,6 +4261,7 @@ async function processRenovImport(){
       document.getElementById('renov-imp-novos').textContent=novos;
       document.getElementById('renov-imp-dup').textContent=dup;
       document.getElementById('renov-imp-naocontato').textContent=naoContato;
+      document.getElementById('renov-imp-revisar').textContent=precisaRevisar;
       document.getElementById('renov-imp-total').textContent=rows.length;
       document.getElementById('renov-import-progress').style.display='';
 
