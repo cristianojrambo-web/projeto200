@@ -4212,9 +4212,15 @@ async function processRenovImport(){
       }
 
       // Batch insert campaign_contacts
+      console.log('=== DEBUG RENOV IMPORT ===');
+      console.log('ccToInsert.length:', ccToInsert.length);
+      console.log('sample item:', JSON.stringify(ccToInsert[0]));
+      console.log('campaignId:', campaignId, 'firstStageId:', firstStageId);
+
       const BATCH=100;
       for(let i=0;i<ccToInsert.length;i+=BATCH){
-        await sb.from('campaign_contacts').insert(ccToInsert.slice(i,i+BATCH));
+        const {error:insErr} = await sb.from('campaign_contacts').insert(ccToInsert.slice(i,i+BATCH));
+        if(insErr){ console.error('Erro ao inserir campaign_contacts:', insErr, JSON.stringify(ccToInsert.slice(i,i+BATCH)[0])); showToast('Erro ao salvar: '+insErr.message); }
       }
 
       document.getElementById('renov-imp-novos').textContent=novos;
