@@ -4143,7 +4143,8 @@ async function processRenovImport(){
 
       // Ensure the shared "Renovações" campaign + stages exist
       const {campaignId, stages} = await ensureRenovCampaign();
-      const firstStageId = stages[0]?.id || null;
+      // Renewals enter as Prospects (no stage_id) — Cristiano moves them into Abordagem manually
+      const firstStageId = null;
 
       // Existing policy numbers in this campaign (dedup key — avoids duplicating across months)
       const {data:existingCc} = await sb.from('campaign_contacts')
