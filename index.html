@@ -764,6 +764,15 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <button class="btn btn-secondary" id="imp-erp-teleport" onclick="setImpErp('teleport')">📂 Teleport — Clientes Investseg</button>
         </div>
 
+        <!-- IMPORTAR RENOVAÇÕES -->
+        <div class="card" style="margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--gray-800)">🔄 Renovações de apólices</div>
+            <div style="font-size:12px;color:var(--gray-500)">Importe a planilha mensal de renovação (EGS ou Investseg) para a campanha "Renovações"</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openRenovImportModal()">+ Importar renovações</button>
+        </div>
+
         <!-- STEP 1: Upload -->
         <div id="imp-step1">
           <div class="card" style="margin-bottom:1rem" id="imp-info-card">
@@ -1176,6 +1185,44 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeOportImportModal()">Cancelar</button>
       <button class="btn btn-primary" id="oport-import-btn" onclick="processOportImport()">Processar lista</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR RENOVAÇÕES -->
+<div class="modal-overlay" id="renov-import-modal" onclick="if(event.target===this)closeRenovImportModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🔄 Importar renovações</h2>
+      <button class="close-btn" onclick="closeRenovImportModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Empresa</label>
+        <select id="renov-empresa">
+          <option value="egs">EGS</option>
+          <option value="investseg">Investseg</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Arquivo (.xlsx)</label>
+        <input type="file" id="renov-file-input" accept=".xlsx,.xls">
+      </div>
+      <div class="tip-box">
+        As renovações são adicionadas à campanha "Renovações" (criada automaticamente). Apólices já importadas em meses anteriores são identificadas pelo número da apólice e não são duplicadas. O sistema tenta vincular cada renovação a um contato existente (por CPF) e ao corretor responsável (pelo nome do produtor).
+      </div>
+      <div id="renov-import-progress" style="display:none;margin-top:1rem">
+        <div class="stats-row">
+          <div class="stat-card accent-a"><div class="stat-value" id="renov-imp-novos">0</div><div class="stat-label">Novas</div></div>
+          <div class="stat-card accent-b"><div class="stat-value" id="renov-imp-dup">0</div><div class="stat-label">Já existiam</div></div>
+          <div class="stat-card"><div class="stat-value" id="renov-imp-naocontato">0</div><div class="stat-label">Sem contato vinculado</div></div>
+          <div class="stat-card accent-navy"><div class="stat-value" id="renov-imp-total">0</div><div class="stat-label">Total no arquivo</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeRenovImportModal()">Cancelar</button>
+      <button class="btn btn-primary" id="renov-import-btn" onclick="processRenovImport()">Processar renovações</button>
     </div>
   </div>
 </div>
@@ -2734,6 +2781,29 @@ let msgTab = 'wa';
 
 const STAGE_COLORS = ['#1B3A6B','#3B82F6','#C9962B','#8B5CF6','#1D9E75','#E24B4A','#0891B2','#D97706'];
 
+// ── RENOVAÇÕES: sigla → nome completo (EGS usa siglas; expandir aqui se aparecer sigla nova) ──
+const EGS_SEGURADORA_MAP = {
+  'ALLI':'Allianz','AZUL':'Azul Seguros','BRAD':'Bradesco Seguros','HDI':'HDI Seguros',
+  'ITAU':'Itaú Seguros','MITS':'Mitsui Sumitomo','PORT':'Porto Seguro','SULA':'Sul América',
+  'TOKI':'Tokio Marine','YEL':'Yelum'
+};
+const EGS_RAMO_MAP = {
+  'AUTO':'Automóvel','COND':'Condomínio','EMPR':'Empresarial','EQUI':'Equipamentos',
+  'RESI':'Residencial','VDG':'Vida em Grupo','VIND':'Vida Individual'
+};
+function expandSigla(map, code){
+  if(!code) return code;
+  const c = String(code).trim().toUpperCase();
+  return map[c] || code; // unknown sigla: show as-is rather than breaking
+}
+const RENOVACOES_CAMPAIGN_NAME = 'Renovações';
+const RENOVACOES_DEFAULT_STAGES = [
+  {name:'Abordagem', color:STAGE_COLORS[0]},
+  {name:'Proposta/Negociação', color:STAGE_COLORS[1]},
+  {name:'Renegociação', color:STAGE_COLORS[2]},
+  {name:'Fechamento', color:STAGE_COLORS[4]}
+];
+
 async function loadCampaigns(){
   const {data,error} = await sb.from('campaigns').select('*').order('created_at',{ascending:false});
   if(error){ console.error(error); return; }
@@ -2929,6 +2999,23 @@ function renderCampKanban(){
       const cardBorder = ccFechamento==='ganho' ? 'border-left:3px solid var(--green)' : ccFechamento==='perdido' ? 'border-left:3px solid var(--red);opacity:0.75' : '';
       const ownerBadge = (isMaster && ccEntry?.user_id) ? buildOwnerBadge(ccEntry.user_id) : '';
       const lembreteIndicator = ccLembrete ? '<span style="font-size:10px;color:'+lemColor+'">🔔 '+fmtDate(ccLembrete)+'</span>' : '';
+
+      // Renewal-specific fields (only present when extra_data was set during a renewal import)
+      const rd = ccEntry?.extra_data;
+      let renovInfo = '';
+      if(rd){
+        const parts = [];
+        if(rd.insurer) parts.push(rd.insurer);
+        if(rd.product) parts.push(rd.product);
+        const linha1 = parts.join(' · ');
+        const premiumTxt = rd.premium ? 'R$ '+Number(rd.premium).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+        const vigTxt = rd.end_date ? 'Venc. '+fmtDate(rd.end_date) : '';
+        renovInfo = '<div style="font-size:11px;color:var(--gray-600);margin-top:4px;line-height:1.4">'
+          + (ccEntry?.policy_number ? '📄 Apólice '+ccEntry.policy_number+'<br>' : '')
+          + (linha1 ? linha1+'<br>' : '')
+          + [premiumTxt, vigTxt].filter(Boolean).join(' · ')
+          + '</div>';
+      }
       return `<div class="kanban-card" draggable="true" data-cid="${c.id}" style="${cardBorder}"
         ondragstart="onCampDragStart(event,'${c.id}')"
         ondragend="onDragEnd(event)">
@@ -2940,6 +3027,7 @@ function renderCampKanban(){
           <span class="kc-phone">${c.phone||srcLabel(c.source)}</span>
           ${lembreteIndicator}
         </div>
+        ${renovInfo}
         ${ccObs ? `<div style="font-size:11px;color:var(--gray-500);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${ccObs}">📝 ${ccObs}</div>` : ''}
         <div class="kc-actions">
           <div style="display:flex;gap:4px;width:100%">
@@ -3933,6 +4021,215 @@ async function processOportImport(){
     } catch(err){
       showToast('Erro: '+err.message); console.error(err);
       btn.textContent='Processar lista'; btn.disabled=false;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── RENOVAÇÕES ──
+function openRenovImportModal(){
+  document.getElementById('renov-import-progress').style.display='none';
+  document.getElementById('renov-file-input').value='';
+  document.getElementById('renov-import-btn').textContent='Processar renovações';
+  document.getElementById('renov-import-btn').disabled=false;
+  document.getElementById('renov-import-modal').classList.add('open');
+}
+function closeRenovImportModal(){
+  document.getElementById('renov-import-modal').classList.remove('open');
+}
+
+// Ensure the "Renovações" campaign exists (shared, created once). Returns {campaignId, stages[]}.
+async function ensureRenovCampaign(){
+  await loadCampaigns();
+  let camp = campaigns.find(c=>c.name===RENOVACOES_CAMPAIGN_NAME);
+  if(!camp){
+    const {data:newCamp, error} = await sb.from('campaigns').insert({
+      user_id: currentUser.id, name: RENOVACOES_CAMPAIGN_NAME,
+      description: 'Renovações de apólices vigentes — EGS e Investseg'
+    }).select().single();
+    if(error){ throw new Error('Erro ao criar campanha Renovações: '+error.message); }
+    camp = newCamp;
+    const stagesData = RENOVACOES_DEFAULT_STAGES.map((s,i)=>({
+      campaign_id: camp.id, user_id: currentUser.id, name: s.name, color: s.color, sort_order: i
+    }));
+    await sb.from('campaign_stages').insert(stagesData);
+    await loadCampaigns();
+  }
+  await loadCampStages(camp.id);
+  return {campaignId: camp.id, stages: campStages[camp.id]||[]};
+}
+
+// Parse one renewal row according to the empresa's column layout into a normalized shape
+function parseRenovRow(row, empresa){
+  if(empresa==='investseg'){
+    const policy = getCol(row,'APÓLICE','APOLICE');
+    if(!policy) return null;
+    return {
+      policyNumber: policy,
+      cpf: getCol(row,'CPF'),
+      produtor: getCol(row,'PRODUTOR'),
+      clientName: getCol(row,'NOME CIVIL SEGURADO'),
+      insurer: getCol(row,'SEGURADORA'),
+      product: getCol(row,'RAMO'),
+      premium: parseFloat(getCol(row,'TOTALPR'))||null,
+      startDate: parseDate(row['INICIO DE VIGÊNCIA']),
+      endDate: parseDate(row['FIM DE VIGÊNCIA']),
+    };
+  } else {
+    const policy = getCol(row,'Apólice','Apolice');
+    if(!policy) return null;
+    return {
+      policyNumber: policy,
+      cpf: getCol(row,'CPF/CNPJ','CPF'),
+      produtor: getCol(row,'Produtor 1','Produtor','Produtor '),
+      clientName: getCol(row,'Cliente'),
+      insurer: expandSigla(EGS_SEGURADORA_MAP, getCol(row,'Seguradora')),
+      product: expandSigla(EGS_RAMO_MAP, getCol(row,'Ramo')),
+      premium: parseFloat(getCol(row,'Prêmio Total'))||null,
+      startDate: parseDate(row['Início Vig.']),
+      endDate: parseDate(row['Final Vig.']),
+    };
+  }
+}
+
+async function processRenovImport(){
+  const empresa = document.getElementById('renov-empresa').value;
+  const file = document.getElementById('renov-file-input').files[0];
+  if(!file){ showToast('Selecione um arquivo'); return; }
+
+  const btn = document.getElementById('renov-import-btn');
+  btn.textContent='Processando...'; btn.disabled=true;
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+
+      // Auto-detect header row: Investseg has report title rows before the real header;
+      // EGS has the header on row 0. Look for known header keywords.
+      const allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      let headerRowIdx = 0;
+      for(let i=0; i<Math.min(15, allRows.length); i++){
+        const rowVals = allRows[i].map(v=>String(v).toUpperCase());
+        if(rowVals.some(v=>v==='APÓLICE'||v==='APOLICE')){ headerRowIdx = i; break; }
+      }
+      const range0 = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+      if(headerRowIdx > 0){
+        range0.s.r = headerRowIdx;
+        ws['!ref'] = XLSX.utils.encode_range(range0);
+      }
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      // Ensure the shared "Renovações" campaign + stages exist
+      const {campaignId, stages} = await ensureRenovCampaign();
+      const firstStageId = stages[0]?.id || null;
+
+      // Existing policy numbers in this campaign (dedup key — avoids duplicating across months)
+      const {data:existingCc} = await sb.from('campaign_contacts')
+        .select('policy_number').eq('campaign_id',campaignId).not('policy_number','is',null);
+      const existingPolicies = new Set((existingCc||[]).map(x=>x.policy_number));
+
+      // Contact matching map — by CPF across the whole base
+      const {data:baseContacts} = await sb.from('contacts').select('id,name,phone,cpf_cnpj,user_id');
+      const cpfMap = {};
+      (baseContacts||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c; });
+
+      // Profiles for produtor → corretor matching (same strategy used in Oportunidades)
+      const {data:profiles} = await sb.from('profiles').select('id, full_name');
+      const profileByName = {};
+      (profiles||[]).forEach(p=>{ if(p.full_name) profileByName[normalizeName(p.full_name)] = p.id; });
+
+      let novos=0, dup=0, naoContato=0;
+      const ccToInsert = [];
+      const newContactsByPolicy = []; // {policy, ownerUserId, p} for rows needing a fresh contact
+
+      for(const row of rows){
+        const p = parseRenovRow(row, empresa);
+        if(!p) continue;
+
+        if(existingPolicies.has(p.policyNumber)){ dup++; continue; }
+        existingPolicies.add(p.policyNumber); // prevent dup within the same file too
+
+        const cpfClean = (p.cpf||'').replace(/\D/g,'');
+        const matched = cpfClean ? cpfMap[cpfClean] : null;
+
+        const isPadrao = !p.produtor || p.produtor.toUpperCase().includes('PADRÃO') || p.produtor.toUpperCase().includes('PADRAO');
+        let ownerUserId = null;
+        if(!isPadrao && p.produtor){
+          const produtorWords = normalizeName(p.produtor).split(' ').filter(w=>w.length>2);
+          let bestMatch = null, bestScore = 0;
+          Object.entries(profileByName).forEach(([profName, pid])=>{
+            const profWords = profName.split(' ').filter(w=>w.length>2);
+            const matchCount = profWords.filter(w=>produtorWords.includes(w)).length;
+            if(matchCount>0 && matchCount===profWords.length && matchCount>bestScore){
+              bestScore = matchCount; bestMatch = pid;
+            }
+            if(produtorWords.length===1 && profWords.length>0 && produtorWords[0]===profWords[0] && bestScore===0){
+              bestMatch = pid;
+            }
+          });
+          if(bestMatch) ownerUserId = bestMatch;
+        }
+
+        const extra = {
+          insurer: p.insurer||null, product: p.product||null,
+          start_date: p.startDate||null, end_date: p.endDate||null,
+          premium: p.premium, empresa
+        };
+
+        if(matched){
+          novos++;
+          ccToInsert.push({
+            campaign_id: campaignId, contact_id: matched.id, user_id: ownerUserId,
+            stage_id: firstStageId, policy_number: p.policyNumber, extra_data: extra
+          });
+        } else if(p.clientName){
+          naoContato++; novos++;
+          newContactsByPolicy.push({p, ownerUserId, extra});
+        }
+      }
+
+      // Create contacts for renewals that didn't match an existing one
+      if(newContactsByPolicy.length){
+        const newContactRows = newContactsByPolicy.map(({p, ownerUserId})=>({
+          user_id: ownerUserId || currentUser.id,
+          name: p.clientName, phone: null,
+          cpf_cnpj: p.cpf||null, source: empresa==='investseg' ? IMP_TELEPORT_KEY : IMP_SOURCE_KEY,
+          status: 'novo', importado: true,
+        }));
+        const {data:createdContacts, error:ccErr} = await sb.from('contacts').insert(newContactRows).select();
+        if(ccErr){ console.error('Erro criando contatos de renovação:', ccErr); }
+        (createdContacts||[]).forEach((c,i)=>{
+          contacts[c.id] = dbToLocal(c);
+          const {ownerUserId, extra} = newContactsByPolicy[i];
+          const p = newContactsByPolicy[i].p;
+          ccToInsert.push({
+            campaign_id: campaignId, contact_id: c.id, user_id: ownerUserId,
+            stage_id: firstStageId, policy_number: p.policyNumber, extra_data: extra
+          });
+        });
+      }
+
+      // Batch insert campaign_contacts
+      const BATCH=100;
+      for(let i=0;i<ccToInsert.length;i+=BATCH){
+        await sb.from('campaign_contacts').insert(ccToInsert.slice(i,i+BATCH));
+      }
+
+      document.getElementById('renov-imp-novos').textContent=novos;
+      document.getElementById('renov-imp-dup').textContent=dup;
+      document.getElementById('renov-imp-naocontato').textContent=naoContato;
+      document.getElementById('renov-imp-total').textContent=rows.length;
+      document.getElementById('renov-import-progress').style.display='';
+
+      btn.textContent='Processar renovações'; btn.disabled=false;
+      showToast(novos+' renovação(ões) adicionada(s) à campanha "'+RENOVACOES_CAMPAIGN_NAME+'"');
+      await loadCampaigns();
+
+    } catch(err){
+      showToast('Erro: '+err.message); console.error(err);
+      btn.textContent='Processar renovações'; btn.disabled=false;
     }
   };
   reader.readAsArrayBuffer(file);
