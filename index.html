@@ -2967,8 +2967,23 @@ function renderCampKanban(){
     return;
   }
 
-  // Sem etapa
-  const unassigned = cc.filter(x=>!x.stage_id).map(x=>contacts[x.contact_id]).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+  // Sem etapa — iterate campaign_contacts entries (not deduplicated contacts) so a client
+  // with multiple policies (e.g. Renovações) shows one card per entry, not collapsed into one
+  function entriesToCards(entries){
+    return entries
+      .map(x=>({cc:x, c:contacts[x.contact_id]}))
+      .filter(e=>e.c)
+      .filter(e=>!q||e.c.name.toLowerCase().includes(q))
+      .sort((a,b)=>{
+        const nameCmp = a.c.name.localeCompare(b.c.name);
+        if(nameCmp!==0) return nameCmp;
+        // Same client (e.g. two policies in Renovações): order by end_date so they sit together
+        const aEnd = a.cc.extra_data?.end_date||'';
+        const bEnd = b.cc.extra_data?.end_date||'';
+        return aEnd.localeCompare(bEnd);
+      });
+  }
+  const unassigned = entriesToCards(cc.filter(x=>!x.stage_id));
 
   board.innerHTML = [
     {id:'__unassigned__', name:'Prospects', color:'#94A3B8'},
@@ -2977,17 +2992,16 @@ function renderCampKanban(){
     const isUnassigned = stage.id==='__unassigned__';
     const stageContacts = isUnassigned
       ? unassigned
-      : cc.filter(x=>x.stage_id===stage.id).map(x=>contacts[x.contact_id]).filter(Boolean).filter(c=>!q||c.name.toLowerCase().includes(q));
+      : entriesToCards(cc.filter(x=>x.stage_id===stage.id));
 
-    const cardsHtml = stageContacts.length ? stageContacts.map(c=>{
+    const cardsHtml = stageContacts.length ? stageContacts.map(({cc:ccEntry, c})=>{
       const sm = scoreMeta(calcScore(c));
-      const ccEntry = cc.find(x=>x.contact_id===c.id);
       const ccId = ccEntry?.id||'';
       const ccLembrete = ccEntry?.lembrete||'';
       const ccObs = ccEntry?.obs||'';
       const tplBtn = isUnassigned ? '' : `<button class="kc-btn" onclick="openMsgModal('${c.id}','${stage.id}')" style="color:var(--green)">💬 Mensagem</button>`;
       const nextStage = stages[stages.findIndex(s=>s.id===stage.id)+1];
-      const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${c.id}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
+      const moveBtn = nextStage ? `<button class="kc-btn" onclick="moveCampCard('${ccId}','${nextStage.id}')">→ ${nextStage.name}</button>` : '';
       const ccFechamento = ccEntry?.fechamento||'';
       const ccProduto = ccEntry?.produto||'';
       const lemColor = ccLembrete && ccLembrete<=today() ? 'var(--red)' : 'var(--amber)';
@@ -3016,8 +3030,8 @@ function renderCampKanban(){
           + [premiumTxt, vigTxt].filter(Boolean).join(' · ')
           + '</div>';
       }
-      return `<div class="kanban-card" draggable="true" data-cid="${c.id}" style="${cardBorder}"
-        ondragstart="onCampDragStart(event,'${c.id}')"
+      return `<div class="kanban-card" draggable="true" data-cid="${c.id}" data-ccid="${ccId}" style="${cardBorder}"
+        ondragstart="onCampDragStart(event,'${ccId}')"
         ondragend="onDragEnd(event)">
         <div class="kc-name" title="${c.name}">${c.name}</div>
         ${ownerBadge}
@@ -3059,18 +3073,18 @@ function renderCampKanban(){
   }).join('');
 }
 
-let campDragContactId = null;
-function onCampDragStart(e, contactId){
-  campDragContactId = contactId;
+let campDragCcId = null;
+function onCampDragStart(e, ccId){
+  campDragCcId = ccId;
   e.dataTransfer.effectAllowed='move';
-  setTimeout(()=>{ const el=document.querySelector(`[data-cid="${contactId}"]`); if(el) el.classList.add('dragging'); },0);
+  setTimeout(()=>{ const el=document.querySelector(`[data-ccid="${ccId}"]`); if(el) el.classList.add('dragging'); },0);
 }
 async function onCampDrop(e, stageId){
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  if(!campDragContactId || !activeCampId) return;
+  if(!campDragCcId || !activeCampId) return;
   const cc = campContacts[activeCampId]||[];
-  const entry = cc.find(x=>x.contact_id===campDragContactId);
+  const entry = cc.find(x=>x.id===campDragCcId);
   if(!entry) return;
   const realStageId = stageId==='__unassigned__' ? null : stageId;
   // Check if moving to fechamento stage
@@ -3078,9 +3092,9 @@ async function onCampDrop(e, stageId){
   if(stage && isFechamentoStage(stage.name) && entry.fechamento !== 'ganho' && entry.fechamento !== 'perdido'){
     // First move the card
     const {error} = await sb.from('campaign_contacts').update({stage_id:realStageId}).eq('id',entry.id);
-    if(error){ showToast('Erro: '+error.message); campDragContactId=null; return; }
+    if(error){ showToast('Erro: '+error.message); campDragCcId=null; return; }
     entry.stage_id = realStageId;
-    campDragContactId = null;
+    campDragCcId = null;
     renderCampKanban();
     // Then open fechamento modal
     const c = contacts[entry.contact_id];
@@ -3090,14 +3104,15 @@ async function onCampDrop(e, stageId){
   const {error} = await sb.from('campaign_contacts').update({stage_id:realStageId}).eq('id',entry.id);
   if(error){ showToast('Erro: '+error.message); return; }
   entry.stage_id = realStageId;
-  campDragContactId = null;
+  campDragCcId = null;
   renderCampKanban();
 }
-async function moveCampCard(contactId, stageId){
+async function moveCampCard(ccId, stageId){
   if(!activeCampId) return;
   const cc = campContacts[activeCampId]||[];
-  const entry = cc.find(x=>x.contact_id===contactId);
+  const entry = cc.find(x=>x.id===ccId);
   if(!entry) return;
+  const contactId = entry.contact_id;
   const stage = (campStages[activeCampId]||[]).find(s=>s.id===stageId);
   const {error} = await sb.from('campaign_contacts').update({stage_id:stageId}).eq('id',entry.id);
   if(error){ showToast('Erro: '+error.message); return; }
@@ -4130,8 +4145,18 @@ async function processRenovImport(){
         .select('policy_number').eq('campaign_id',campaignId).not('policy_number','is',null);
       const existingPolicies = new Set((existingCc||[]).map(x=>x.policy_number));
 
-      // Contact matching map — by CPF across the whole base
-      const {data:baseContacts} = await sb.from('contacts').select('id,name,phone,cpf_cnpj,user_id');
+      // Contact matching map — by CPF across the whole base (paginated: base may exceed 1000 rows)
+      let baseContacts = [];
+      { const PAGE=1000; let from=0;
+        while(true){
+          const {data, error} = await sb.from('contacts').select('id,name,phone,cpf_cnpj,user_id').range(from, from+PAGE-1);
+          if(error){ console.error('Erro carregando contacts:', error); break; }
+          if(!data || data.length===0) break;
+          baseContacts = baseContacts.concat(data);
+          if(data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
       const cpfMap = {};
       (baseContacts||[]).forEach(c=>{ if(c.cpf_cnpj) cpfMap[c.cpf_cnpj.replace(/\D/g,'')] = c; });
 
