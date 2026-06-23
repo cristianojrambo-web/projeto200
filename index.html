@@ -2993,20 +2993,41 @@ function renderCampKanban(){
   }
 
   // Sem etapa — iterate campaign_contacts entries (not deduplicated contacts) so a client
-  // with multiple policies (e.g. Renovações) shows one card per entry, not collapsed into one
+  // with multiple policies (e.g. Renovações) shows one card per entry, not collapsed into one.
+  // Sort by end_date (vencimento) primarily; when the same client has multiple policies,
+  // group them together at the position of their earliest end_date, then order within the group.
   function entriesToCards(entries){
-    return entries
+    const items = entries
       .map(x=>({cc:x, c:contacts[x.contact_id]}))
       .filter(e=>e.c)
-      .filter(e=>!q||e.c.name.toLowerCase().includes(q))
-      .sort((a,b)=>{
-        const nameCmp = a.c.name.localeCompare(b.c.name);
-        if(nameCmp!==0) return nameCmp;
-        // Same client (e.g. two policies in Renovações): order by end_date so they sit together
-        const aEnd = a.cc.extra_data?.end_date||'';
-        const bEnd = b.cc.extra_data?.end_date||'';
-        return aEnd.localeCompare(bEnd);
-      });
+      .filter(e=>!q||e.c.name.toLowerCase().includes(q));
+
+    // Group by contact_id
+    const groups = {};
+    items.forEach(item=>{
+      const key = item.cc.contact_id;
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+
+    const endDateOf = item => item.cc.extra_data?.end_date || '';
+
+    // Sort within each group by end_date
+    Object.values(groups).forEach(group=>{
+      group.sort((a,b)=>endDateOf(a).localeCompare(endDateOf(b)));
+    });
+
+    // Sort groups by their earliest end_date (use a high sentinel for groups without a date,
+    // so non-renewal cards without end_date fall back to name order at the end)
+    const groupList = Object.values(groups);
+    groupList.sort((a,b)=>{
+      const aKey = endDateOf(a[0]) || '9999-99-99';
+      const bKey = endDateOf(b[0]) || '9999-99-99';
+      if(aKey!==bKey) return aKey.localeCompare(bKey);
+      return a[0].c.name.localeCompare(b[0].c.name);
+    });
+
+    return groupList.flat();
   }
   const unassigned = entriesToCards(cc.filter(x=>!x.stage_id));
 
