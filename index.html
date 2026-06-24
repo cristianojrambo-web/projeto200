@@ -706,9 +706,12 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 
       <!-- LEMBRETES -->
       <div id="view-lembretes" class="view">
-        <div class="page-header">
-          <h1>Agenda</h1>
-          <p>Follow-ups e lembretes de abordagem</p>
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <h1>Agenda</h1>
+            <p>Follow-ups e lembretes de abordagem</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openAgendaEventoModal()">+ Novo lembrete</button>
         </div>
         <div class="chips-row">
           <div class="chip active" onclick="setLembreteFilter('todos',this)">Todos</div>
@@ -1233,6 +1236,49 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeRenovImportModal()">Cancelar</button>
       <button class="btn btn-primary" id="renov-import-btn" onclick="processRenovImport()">Processar renovações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO LEMBRETE / EVENTO MANUAL -->
+<div class="modal-overlay" id="agenda-evento-modal" onclick="if(event.target===this)closeAgendaEventoModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h2 id="agenda-evento-modal-title">📅 Novo lembrete</h2>
+      <button class="close-btn" onclick="closeAgendaEventoModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Título *</label>
+        <input type="text" id="ae-titulo" placeholder="Ex: Ligar para seguradora, Reunião com cliente...">
+      </div>
+      <div class="form-group">
+        <label>Vincular a um contato (opcional)</label>
+        <input type="text" id="ae-contact-search" placeholder="Buscar contato..." oninput="renderAeContactResults()">
+        <div id="ae-contact-results" style="max-height:140px;overflow-y:auto;margin-top:4px"></div>
+        <div id="ae-contact-selected" style="display:none;margin-top:6px;font-size:13px;background:var(--gray-50);padding:6px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+          <span id="ae-contact-selected-name"></span>
+          <button class="close-btn" style="font-size:14px" onclick="clearAeContact()">×</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div class="form-group" style="flex:1">
+          <label>Data *</label>
+          <input type="date" id="ae-data">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Hora (opcional)</label>
+          <input type="time" id="ae-hora">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="ae-obs" rows="2" placeholder="Detalhes adicionais..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAgendaEventoModal()">Cancelar</button>
+      <button class="btn btn-primary" id="ae-save-btn" onclick="saveAgendaEvento()">Salvar lembrete</button>
     </div>
   </div>
 </div>
@@ -1852,7 +1898,7 @@ function goTo(view, el){
   const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', oportunidades:'Oportunidades', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard'){ 
-    Promise.all([loadCampaigns(), loadAllCampContactsForAgenda()]).then(()=>renderDashboard()); 
+    Promise.all([loadCampaigns(), loadAllCampContactsForAgenda(), loadAgendaEventos()]).then(()=>renderDashboard()); 
   }
   if(view==='lista'){ renderChips(); renderGrid(); }
   if(view==='campanhas') renderCampList();
@@ -1866,7 +1912,7 @@ function goTo(view, el){
     if(divider) divider.style.display = isSecretaria && !isMaster ? 'none' : '';
     renderAniversarios();
   }
-  if(view==='lembretes'){ loadAllCampContactsForAgenda().then(()=>renderLembretes()); }
+  if(view==='lembretes'){ Promise.all([loadAllCampContactsForAgenda(), loadAgendaEventos()]).then(()=>renderLembretes()); }
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
 }
@@ -1900,11 +1946,14 @@ function renderDashboard(){
       if(c) campLem.push({name:c.name, note:camp?.name||'Campanha', lembrete:x.lembrete, tipo:'campanha', ccId:x.id, campId, id:c.id, ccOwnerId:x.user_id});
     });
   });
+  const eventoLem = agendaEventos.filter(ev=>ev.data<=tod).map(ev=>({
+    name: ev.titulo, note: '📌', lembrete: ev.data, tipo:'evento', id: ev.id, ccOwnerId: ev.user_id
+  }));
   // Show owner chips for master in dashboard
   const dsOwnerChips = document.getElementById('ds-lembrete-owner-chips');
   if(dsOwnerChips) dsOwnerChips.style.display = isMaster ? '' : 'none';
 
-  let allLemRaw = [...geralLem,...campLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
+  let allLemRaw = [...geralLem,...campLem,...eventoLem].sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
   // Apply owner filter for master — campLem uses ccId.user_id, geralLem uses contact.user_id
   if(isMaster && dsLembreteOwnerFilter==='meus'){
     allLemRaw = allLemRaw.filter(c=> c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id);
@@ -1918,8 +1967,11 @@ function renderDashboard(){
       const over = c.lembrete < tod;
       const tag = c.tipo==='campanha'
         ? '<span style="font-size:10px;background:var(--navy-light);color:var(--navy);padding:1px 5px;border-radius:99px;margin-left:4px">'+c.note+'</span>'
+        : c.tipo==='evento'
+        ? '<span style="font-size:10px;background:#f3e8ff;color:#7c3aed;padding:1px 5px;border-radius:99px;margin-left:4px">📌</span>'
         : '';
-      return '<div class="reminder-card '+(over?'overdue':'today')+'" style="margin-bottom:6px;cursor:pointer" onclick="'+(c.tipo==='campanha'?'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')':'openModal(null,\''+c.id+'\')')+'">'+
+      const clickAction = c.tipo==='campanha' ? 'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')' : c.tipo==='evento' ? '' : 'openModal(null,\''+c.id+'\')';
+      return '<div class="reminder-card '+(over?'overdue':'today')+'" style="margin-bottom:6px;cursor:'+(clickAction?'pointer':'default')+'" onclick="'+clickAction+'">'+
         '<div class="reminder-dot '+(over?'dot-overdue':'dot-today')+'"></div>'+
         '<div class="reminder-body">'+
           '<div style="display:flex;align-items:center;flex-wrap:wrap">'+
@@ -1987,7 +2039,8 @@ function updateBadges(){
   const tod = today();
   const cntContacts = allFilled().filter(c=>c.lembrete&&c.lembrete<=tod).length;
   const cntCamp = Object.values(campContacts).flat().filter(x=>x.lembrete&&x.lembrete<=tod).length;
-  const cnt = cntContacts + cntCamp;
+  const cntEventos = agendaEventos.filter(ev=>ev.data<=tod).length;
+  const cnt = cntContacts + cntCamp + cntEventos;
   const b = document.getElementById('lembrete-badge');
   const ptop = document.getElementById('prog-fill-top');
   const plbl = document.getElementById('prog-label-top');
@@ -2461,22 +2514,43 @@ function renderLembretes(){
     });
   });
 
-  let all = [...geralItems, ...campItems];
+  // Lembretes manuais (agenda_eventos) — podem ou não estar vinculados a um contato
+  const eventoItems = agendaEventos.map(ev=>{
+    const c = ev.contact_id ? contacts[ev.contact_id] : null;
+    return {
+      id: ev.id, name: ev.titulo, lembrete: ev.data, hora: ev.hora,
+      note: ev.obs || (c ? c.name : ''), score: c ? calcScore(c) : null,
+      status: null, tipo: 'evento', ccId: null, evOwnerId: ev.user_id,
+      linkedContactId: c ? c.id : null, linkedContactName: c ? c.name : null
+    };
+  });
+
+  let all = [...geralItems, ...campItems, ...eventoItems];
 
   // Show owner filter chips only for master
   const ownerChipsEl = document.getElementById('lembrete-owner-chips');
   if(ownerChipsEl) ownerChipsEl.style.display = isMaster ? '' : 'none';
 
   // Apply owner filter for master — use ccOwnerId (campaign_contact.user_id) for camp items,
-  // and contact.user_id for geral items
+  // evOwnerId for manual events, and contact.user_id for geral items
   if(isMaster && lembreteOwnerFilter==='meus'){
-    all = all.filter(c=> c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id);
+    all = all.filter(c=>{
+      if(c.tipo==='evento') return c.evOwnerId===currentUser.id;
+      return c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id;
+    });
   }
 
   if(lembreteFilter==='vencidos') all=all.filter(c=>c.lembrete<tod);
   else if(lembreteFilter==='hoje') all=all.filter(c=>c.lembrete===tod);
   else if(lembreteFilter==='proximos') all=all.filter(c=>c.lembrete>tod&&c.lembrete<=fut7s);
-  all.sort((a,b)=>a.lembrete.localeCompare(b.lembrete));
+  all.sort((a,b)=>{
+    const dateCmp = a.lembrete.localeCompare(b.lembrete);
+    if(dateCmp!==0) return dateCmp;
+    // Same day: items with a specific time come first, ordered by time; all-day items after
+    const aTime = a.hora || '99:99';
+    const bTime = b.hora || '99:99';
+    return aTime.localeCompare(bTime);
+  });
 
   const el = document.getElementById('lembretes-list');
   if(!all.length){ el.innerHTML='<div class="empty-state"><div class="es-icon">🎉</div><p>Nenhum lembrete encontrado</p></div>'; return; }
@@ -2485,25 +2559,34 @@ function renderLembretes(){
     const isToday = c.lembrete===tod;
     const cls = over?'overdue':isToday?'today':'';
     const dc = over?'var(--red)':isToday?'var(--amber)':'var(--gray-500)';
-    const sm = scoreMeta(c.score);
+    const sm = c.score!=null ? scoreMeta(c.score) : null;
     const campTag = c.tipo==='campanha'
       ? '<span style="font-size:10px;background:var(--navy-light);color:var(--navy);padding:1px 6px;border-radius:99px">'+c.campName+'</span>'
+      : c.tipo==='evento'
+      ? '<span style="font-size:10px;background:#f3e8ff;color:#7c3aed;padding:1px 6px;border-radius:99px">📌 Lembrete manual</span>'
       : '<span style="font-size:10px;background:var(--gold-light);color:var(--gold);padding:1px 6px;border-radius:99px">Geral</span>';
     const doneBtn = c.tipo==='campanha'
       ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();markCampDone(\''+c.ccId+'\',\''+c.campId+'\')">✓ Concluir</button>'
+      : c.tipo==='evento'
+      ? '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();concluirAgendaEvento(\''+c.id+'\')">✓ Concluir</button><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();excluirAgendaEvento(\''+c.id+'\',\''+c.name.replace(/'/g,"\\'")+'\')">🗑️</button></div>'
       : '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();markDone(\''+c.id+'\')">✓ Concluir</button>';
-    return '<div class="reminder-card '+cls+'" style="cursor:pointer" onclick="'+( c.tipo==='campanha' ? 'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')' : 'openModal(null,\''+c.id+'\')')+'">'
+    const clickAction = c.tipo==='campanha' ? 'openCampContactModal(\''+c.ccId+'\',\''+c.name+'\')'
+      : c.tipo==='evento' ? (c.linkedContactId ? 'openModal(null,\''+c.linkedContactId+'\')' : '')
+      : 'openModal(null,\''+c.id+'\')';
+    const horaTxt = c.hora ? c.hora.slice(0,5)+' · ' : '';
+    const noteTxt = c.tipo==='evento' && c.linkedContactName ? '👤 '+c.linkedContactName+(c.note&&c.note!==c.linkedContactName?' · '+c.note:'') : c.note;
+    return '<div class="reminder-card '+cls+'" style="cursor:'+(clickAction?'pointer':'default')+'" onclick="'+clickAction+'">'
       +'<div class="reminder-dot '+(over?'dot-overdue':isToday?'dot-today':'dot-future')+'"></div>'
       +'<div class="reminder-body">'
         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
           +'<span class="reminder-name">'+c.name+'</span>'
           +campTag
-          +'<span class="score-badge '+sm.cls+'" style="font-size:10px">'+sm.l+'</span>'
+          +(sm ? '<span class="score-badge '+sm.cls+'" style="font-size:10px">'+sm.l+'</span>' : '')
         +'</div>'
-        +'<div class="reminder-note">'+c.note+'</div>'
+        +(noteTxt ? '<div class="reminder-note">'+noteTxt+'</div>' : '')
       +'</div>'
       +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
-        +'<div class="reminder-date" style="color:'+dc+'">'+(over?'Vencido — ':isToday?'Hoje':'')+fmtDate(c.lembrete)+'</div>'
+        +'<div class="reminder-date" style="color:'+dc+'">'+(over?'Vencido — ':isToday?'Hoje · ':'')+horaTxt+fmtDate(c.lembrete)+'</div>'
         +doneBtn
       +'</div>'
       +'</div>';
@@ -2553,6 +2636,93 @@ async function loadAllCampContactsForAgenda(){
       else campContacts[x.campaign_id].push(x);
     });
   }
+}
+
+// ── AGENDA: lembretes/eventos manuais (não vinculados a contato ou campanha) ──
+let agendaEventos = [];
+async function loadAgendaEventos(){
+  let query = sb.from('agenda_eventos').select('*').eq('concluido', false);
+  if(!isMaster) query = query.eq('user_id', currentUser.id);
+  const {data, error} = await query;
+  if(error){ console.error('Erro carregando agenda_eventos:', error); agendaEventos=[]; return; }
+  agendaEventos = data||[];
+}
+
+let aeSelectedContactId = null;
+function openAgendaEventoModal(){
+  document.getElementById('ae-titulo').value='';
+  document.getElementById('ae-data').value=today();
+  document.getElementById('ae-hora').value='';
+  document.getElementById('ae-obs').value='';
+  document.getElementById('ae-contact-search').value='';
+  document.getElementById('ae-contact-results').innerHTML='';
+  document.getElementById('ae-contact-selected').style.display='none';
+  aeSelectedContactId = null;
+  document.getElementById('agenda-evento-modal').classList.add('open');
+}
+function closeAgendaEventoModal(){
+  document.getElementById('agenda-evento-modal').classList.remove('open');
+}
+function renderAeContactResults(){
+  const q = document.getElementById('ae-contact-search').value.trim().toLowerCase();
+  const el = document.getElementById('ae-contact-results');
+  if(!q){ el.innerHTML=''; return; }
+  const matches = Object.values(contacts).filter(c=>c&&c.name&&c.name.toLowerCase().includes(q)).slice(0,8);
+  el.innerHTML = matches.map(c=>
+    `<div style="padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''" onclick="selectAeContact('${c.id}','${c.name.replace(/'/g,"\\'")}')">${c.name}</div>`
+  ).join('');
+}
+function selectAeContact(id, name){
+  aeSelectedContactId = id;
+  document.getElementById('ae-contact-search').value='';
+  document.getElementById('ae-contact-results').innerHTML='';
+  document.getElementById('ae-contact-selected').style.display='flex';
+  document.getElementById('ae-contact-selected-name').textContent = name;
+}
+function clearAeContact(){
+  aeSelectedContactId = null;
+  document.getElementById('ae-contact-selected').style.display='none';
+}
+async function saveAgendaEvento(){
+  const titulo = document.getElementById('ae-titulo').value.trim();
+  const data = document.getElementById('ae-data').value;
+  const hora = document.getElementById('ae-hora').value || null;
+  const obs = document.getElementById('ae-obs').value.trim() || null;
+  if(!titulo){ showToast('Informe um título'); return; }
+  if(!data){ showToast('Informe uma data'); return; }
+
+  const btn = document.getElementById('ae-save-btn');
+  btn.textContent='Salvando...'; btn.disabled=true;
+
+  const {error} = await sb.from('agenda_eventos').insert({
+    user_id: currentUser.id, contact_id: aeSelectedContactId,
+    titulo, data, hora, obs
+  });
+
+  btn.textContent='Salvar lembrete'; btn.disabled=false;
+  if(error){ showToast('Erro: '+error.message); return; }
+
+  showToast('Lembrete adicionado ✓');
+  closeAgendaEventoModal();
+  await loadAgendaEventos();
+  renderLembretes();
+}
+async function concluirAgendaEvento(id){
+  const {error} = await sb.from('agenda_eventos').update({concluido:true}).eq('id', id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  agendaEventos = agendaEventos.filter(x=>x.id!==id);
+  renderLembretes();
+  renderDashboard();
+  showToast('Concluído ✓');
+}
+async function excluirAgendaEvento(id, titulo){
+  if(!confirm('Excluir o lembrete "'+titulo+'"?')) return;
+  const {error} = await sb.from('agenda_eventos').delete().eq('id', id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  agendaEventos = agendaEventos.filter(x=>x.id!==id);
+  renderLembretes();
+  renderDashboard();
+  showToast('Lembrete excluído ✓');
 }
 
 function setLembreteFilter(f,el){
@@ -2756,7 +2926,7 @@ async function initApp(user){
   document.getElementById('app-shell').style.display='flex';
 
   // Load campContacts before rendering dashboard so agenda shows correctly on first load
-  Promise.all([loadCampaigns(), loadAllCampContactsForAgenda()]).then(()=>{
+  Promise.all([loadCampaigns(), loadAllCampContactsForAgenda(), loadAgendaEventos()]).then(()=>{
     renderDashboard();
     updateBadges();
   });
