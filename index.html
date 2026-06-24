@@ -529,6 +529,10 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           <p>Sua lista de prospecção organizada por grupo de origem</p>
         </div>
         <div class="chips-row" id="lista-chips"></div>
+        <div class="chips-row" id="lista-owner-chips" style="margin:0 0 0.75rem;gap:6px;display:none">
+          <div class="chip active" onclick="setListaOwnerFilter('todos',this)">Todos</div>
+          <div class="chip" onclick="setListaOwnerFilter('meus',this)">👤 Meus</div>
+        </div>
         <div class="tip-box" id="lista-tip"></div>
         <div class="action-bar">
           <div class="action-bar-left">
@@ -2020,7 +2024,15 @@ function setSrc(key){ activeSrc=key; renderChips(); renderGrid(); }
 function renderGrid(){
   const src = userSources.find(s=>s.key===activeSrc);
   const q = (document.getElementById('lista-search')||{value:''}).value.toLowerCase();
-  const srcContacts = Object.values(contacts).filter(c=>c&&c.source===activeSrc).filter(c=>!q||c.name&&c.name.toLowerCase().includes(q));
+
+  // Show owner filter chips only for master (Cristiano as corretor needs to separate his own contacts)
+  const ownerChips = document.getElementById('lista-owner-chips');
+  if(ownerChips) ownerChips.style.display = isMaster ? '' : 'none';
+
+  let srcContacts = Object.values(contacts).filter(c=>c&&c.source===activeSrc).filter(c=>!q||c.name&&c.name.toLowerCase().includes(q));
+  if(isMaster && listaOwnerFilter==='meus'){
+    srcContacts = srcContacts.filter(c=>c.user_id===currentUser.id);
+  }
   let html = '<div class="contact-grid">';
   for(let i=0;i<src.slots;i++){
     const c = srcContacts[i]||null;
@@ -2779,6 +2791,7 @@ let campContacts = {};     // campId -> campaign_contacts[]
 let stageTemplates = {};   // stageId -> templates[]
 let activeCampId = null;
 let campOwnerFilter = 'todos'; // 'todos' | 'meus' — master only
+let listaOwnerFilter = 'todos'; // 'todos' | 'meus' — master only, for the Contatos view
 let campEmpresaFilter = 'todas'; // 'todas' | 'egs' | 'investseg' — Renovações only, for corretores with both bases
 let addContactsFilter = 'todos';
 let selectedContactIds = new Set();
@@ -2935,6 +2948,13 @@ function buildOwnerBadge(userId){
   const profile = masterProfiles.find(p=>p.id===userId);
   const name = profile?.full_name || 'Corretor';
   return '<div style="margin-bottom:4px"><span style="font-size:10px;background:var(--gray-100);color:var(--gray-600);padding:1px 6px;border-radius:99px">'+name+'</span></div>';
+}
+
+function setListaOwnerFilter(f, el){
+  listaOwnerFilter = f;
+  document.querySelectorAll('#lista-owner-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderGrid();
 }
 
 function setCampOwnerFilter(f, el){
