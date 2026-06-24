@@ -4375,8 +4375,12 @@ function renderOportItems(){
   // Only show matched contacts (those found in base) — these are actionable
   let list = matched;
   if(q) list = list.filter(x=>(x.raw_name||'').toLowerCase().includes(q));
-  // Sort: own items first, then unassigned (PADRÃO) at the end
+  // Sort: own items first, then unassigned (PADRÃO); items already added to a campaign
+  // go to the very end so they don't clutter the view of contacts still actionable
   list.sort((a,b)=>{
+    const aAdded = a.added_to_campaign ? 1 : 0;
+    const bAdded = b.added_to_campaign ? 1 : 0;
+    if(aAdded !== bAdded) return aAdded - bAdded;
     const aOwn = a.user_id===currentUser.id ? 0 : 1;
     const bOwn = b.user_id===currentUser.id ? 0 : 1;
     return aOwn - bOwn;
@@ -4404,7 +4408,10 @@ function renderOportItems(){
     const ownerInfo = item.user_id ? '' : '<span style="font-size:10px;color:var(--gray-400)">· disponível para qualquer corretor</span>';
     const actionBtn = item.added_to_campaign
       ? '<span style="font-size:11px;background:#f0fdf4;color:var(--green);border:1px solid var(--green);padding:4px 10px;border-radius:99px;font-weight:600">✓ Já no funil</span>'
-      : '<button class="btn btn-sm btn-primary" onclick="openOportAddCampModal(\''+item.id+'\',\''+(c?.id||'')+'\',\''+name.replace(/'/g,"\\'")+'\')">+ Adicionar à campanha</button>';
+      : '<div style="display:flex;gap:6px;align-items:center">'
+        +'<button class="btn btn-sm btn-primary" onclick="openOportAddCampModal(\''+item.id+'\',\''+(c?.id||'')+'\',\''+name.replace(/'/g,"\\'")+'\')">+ Adicionar à campanha</button>'
+        +'<button class="btn btn-sm btn-secondary" title="Excluir desta lista" onclick="deleteOportItem(\''+item.id+'\',\''+name.replace(/'/g,"\\'")+'\')" style="color:var(--red);padding:6px 10px">🗑️</button>'
+        +'</div>';
     return '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--gray-200);border-radius:var(--radius-sm);background:#fff">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:13px;font-weight:500">'+name+'</div>'
@@ -4414,6 +4421,17 @@ function renderOportItems(){
       +actionBtn
       +'</div>';
   }).join('');
+}
+
+async function deleteOportItem(itemId, name){
+  if(!confirm('Excluir "'+name+'" desta lista de oportunidades?\n\nUse isto apenas quando o item não representa uma oportunidade real, ou está incorreto nesta lista. Esta ação não pode ser desfeita.')) return;
+  const {error} = await sb.from('opportunity_items').delete().eq('id', itemId);
+  if(error){ showToast('Erro: '+error.message); return; }
+  if(activeOportListId && oportItems[activeOportListId]){
+    oportItems[activeOportListId] = oportItems[activeOportListId].filter(x=>x.id!==itemId);
+  }
+  renderOportItems();
+  showToast('Item excluído da lista ✓');
 }
 
 let oportAddCampItemId=null, oportAddCampContactId=null;
