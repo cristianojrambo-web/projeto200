@@ -2539,9 +2539,6 @@ function renderLembretes(){
   // Apply owner filter for master — use ccOwnerId (campaign_contact.user_id) for camp items,
   // evOwnerId for manual events, and contact.user_id for geral items
   if(isMaster && lembreteOwnerFilter==='meus'){
-    console.log('=== DEBUG MEUS FILTER ===');
-    console.log('currentUser.id:', JSON.stringify(currentUser.id));
-    eventoItems.forEach(c=>console.log('evento:', c.name, 'evOwnerId:', JSON.stringify(c.evOwnerId), 'match:', c.evOwnerId===currentUser.id));
     all = all.filter(c=>{
       if(c.tipo==='evento') return c.evOwnerId===currentUser.id;
       return c.ccOwnerId ? c.ccOwnerId===currentUser.id : contacts[c.id]?.user_id===currentUser.id;
