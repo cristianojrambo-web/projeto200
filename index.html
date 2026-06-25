@@ -1275,6 +1275,11 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
         <label>Observação</label>
         <textarea id="ae-obs" rows="2" placeholder="Detalhes adicionais..."></textarea>
       </div>
+      <div class="form-group">
+        <label>Convidar colegas (opcional)</label>
+        <div id="ae-colegas-list" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;padding:8px"></div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:4px">O lembrete aparecerá na agenda de cada colega marcado, de forma independente.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeAgendaEventoModal()">Cancelar</button>
@@ -2649,7 +2654,7 @@ async function loadAgendaEventos(){
 }
 
 let aeSelectedContactId = null;
-function openAgendaEventoModal(){
+async function openAgendaEventoModal(){
   document.getElementById('ae-titulo').value='';
   document.getElementById('ae-data').value=today();
   document.getElementById('ae-hora').value='';
@@ -2659,6 +2664,18 @@ function openAgendaEventoModal(){
   document.getElementById('ae-contact-selected').style.display='none';
   aeSelectedContactId = null;
   document.getElementById('agenda-evento-modal').classList.add('open');
+  await renderAeColegasList();
+}
+async function renderAeColegasList(){
+  const el = document.getElementById('ae-colegas-list');
+  el.innerHTML = '<div style="font-size:12px;color:var(--gray-400)">Carregando colegas...</div>';
+  const {data, error} = await sb.from('profiles_publico').select('id, full_name').neq('id', currentUser.id).order('full_name');
+  if(error || !data || !data.length){ el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Nenhum colega encontrado</div>'; return; }
+  el.innerHTML = data.map(p=>
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+    +'<input type="checkbox" value="'+p.id+'" class="ae-colega-checkbox"> '+(p.full_name||'(sem nome)')
+    +'</label>'
+  ).join('');
 }
 function closeAgendaEventoModal(){
   document.getElementById('agenda-evento-modal').classList.remove('open');
@@ -2691,18 +2708,23 @@ async function saveAgendaEvento(){
   if(!titulo){ showToast('Informe um título'); return; }
   if(!data){ showToast('Informe uma data'); return; }
 
+  const convidadoIds = Array.from(document.querySelectorAll('.ae-colega-checkbox:checked')).map(cb=>cb.value);
+  // One independent row per person: the creator + each invited colleague
+  const userIds = [currentUser.id, ...convidadoIds];
+
   const btn = document.getElementById('ae-save-btn');
   btn.textContent='Salvando...'; btn.disabled=true;
 
-  const {error} = await sb.from('agenda_eventos').insert({
-    user_id: currentUser.id, contact_id: aeSelectedContactId,
+  const rows = userIds.map(uid=>({
+    user_id: uid, contact_id: aeSelectedContactId,
     titulo, data, hora, obs
-  });
+  }));
+  const {error} = await sb.from('agenda_eventos').insert(rows);
 
   btn.textContent='Salvar lembrete'; btn.disabled=false;
   if(error){ showToast('Erro: '+error.message); return; }
 
-  showToast('Lembrete adicionado ✓');
+  showToast(convidadoIds.length ? 'Lembrete adicionado e enviado a '+convidadoIds.length+' colega(s) ✓' : 'Lembrete adicionado ✓');
   closeAgendaEventoModal();
   await loadAgendaEventos();
   renderLembretes();
