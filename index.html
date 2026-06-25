@@ -2672,8 +2672,8 @@ async function renderAeColegasList(){
   const {data, error} = await sb.from('profiles_publico').select('id, full_name').neq('id', currentUser.id).order('full_name');
   if(error || !data || !data.length){ el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Nenhum colega encontrado</div>'; return; }
   el.innerHTML = data.map(p=>
-    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
-    +'<input type="checkbox" value="'+p.id+'" class="ae-colega-checkbox"> '+(p.full_name||'(sem nome)')
+    '<label style="display:flex !important;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:0">'
+    +'<input type="checkbox" value="'+p.id+'" class="ae-colega-checkbox" style="width:auto !important;flex:none"> '+(p.full_name||'(sem nome)')
     +'</label>'
   ).join('');
 }
