@@ -4360,7 +4360,7 @@ function parseRenovRow(row, empresa){
       cpf: getCol(row,'CPF/CNPJ','CPF'),
       produtor: getCol(row,'Produtor 1','Produtor','Produtor '),
       clientName: getCol(row,'Cliente'),
-      insurer: expandSigla(EGS_SEGURADORA_MAP, getCol(row,'Seguradora')),
+      insurer: expandSigla(EGS_SEGURADORA_MAP, getCol(row,'Seguradora','Seg.','Seg')),
       product: expandSigla(EGS_RAMO_MAP, getCol(row,'Ramo')),
       premium: parseFloat(getCol(row,'Prêmio Total'))||null,
       startDate: parseDate(row['Início Vig.']),
@@ -4403,10 +4403,11 @@ async function processRenovImport(){
       // Renewals enter as Prospects (no stage_id) — Cristiano moves them into Abordagem manually
       const firstStageId = null;
 
-      // Existing policy numbers in this campaign (dedup key — avoids duplicating across months)
+      // Existing renewals in this campaign — dedup by policy_number + end_date
+      // (same policy with a different renewal period = new card, not a duplicate)
       const {data:existingCc} = await sb.from('campaign_contacts')
-        .select('policy_number').eq('campaign_id',campaignId).not('policy_number','is',null);
-      const existingPolicies = new Set((existingCc||[]).map(x=>x.policy_number));
+        .select('policy_number,extra_data').eq('campaign_id',campaignId).not('policy_number','is',null);
+      const existingKeys = new Set((existingCc||[]).map(x=>x.policy_number+'|'+(x.extra_data?.end_date||'')));
 
       // Contact matching map — by CPF across the whole base (paginated: base may exceed 1000 rows)
       let baseContacts = [];
@@ -4436,8 +4437,9 @@ async function processRenovImport(){
         const p = parseRenovRow(row, empresa);
         if(!p) continue;
 
-        if(existingPolicies.has(p.policyNumber)){ dup++; continue; }
-        existingPolicies.add(p.policyNumber); // prevent dup within the same file too
+        const dedupKey = p.policyNumber+'|'+(p.endDate||'');
+        if(existingKeys.has(dedupKey)){ dup++; continue; }
+        existingKeys.add(dedupKey); // prevent dup within the same file too
 
         const cpfClean = (p.cpf||'').replace(/\D/g,'');
         const matched = cpfClean ? cpfMap[cpfClean] : null;
