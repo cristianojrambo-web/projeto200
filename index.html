@@ -276,6 +276,11 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
 .col-negociacao .kanban-col-header { border-bottom: 2px solid #8B5CF6; }
 .col-fechado .kanban-col-header { border-bottom: 2px solid var(--green); }
 .col-descartado .kanban-col-header { border-bottom: 2px solid var(--gray-300); }
+.col-aguardando .kanban-col-header { border-bottom: 2px solid #8B5CF6; }
+.col-paralancar .kanban-col-header { border-bottom: 2px solid var(--amber); }
+.col-lancadaauto .kanban-col-header { border-bottom: 2px solid var(--green); }
+.col-lancadamanual .kanban-col-header { border-bottom: 2px solid #3B82F6; }
+.col-concluida .kanban-col-header { border-bottom: 2px solid var(--gray-300); }
 
 /* CAMP CARDS */
 .camp-card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-md);padding:1.25rem;cursor:pointer;transition:all 0.15s;display:flex;flex-direction:column;gap:8px;min-height:120px}
@@ -411,6 +416,9 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
       <div class="nav-item" id="nav-aniversarios" onclick="goTo('aniversarios',this)">
         <span class="icon">🎂</span> Aniversários
         <span id="aniv-badge" style="margin-left:auto;background:var(--gold);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:99px;display:none">0</span>
+      </div>
+      <div class="nav-item" id="nav-propostas" onclick="goTo('propostas',this)">
+        <span class="icon">🗂️</span> Propostas
       </div>
       <div class="nav-item" onclick="goTo('lembretes',this)">
         <span class="icon">📅</span> Agenda
@@ -702,6 +710,18 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
           </div>
           <div id="oport-items-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
+      </div>
+
+      <!-- PROPOSTAS (esteira de lançamento no ERP — independente do funil de contatos) -->
+      <div id="view-propostas" class="view">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <h1>Propostas</h1>
+            <p>Controle de lançamento das apólices efetivadas no ERP</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openPropModal()">+ Cadastrar proposta</button>
+        </div>
+        <div class="kanban-board" id="prop-kanban-board" style="grid-template-columns:repeat(5,1fr)"></div>
       </div>
 
       <!-- LEMBRETES -->
@@ -1093,6 +1113,58 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeAnivModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="sendAnivMsg()">💬 Abrir WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROPOSTA — cadastro rápido -->
+<div class="modal-overlay" id="prop-modal" onclick="if(event.target===this)closePropModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Cadastrar proposta</h2>
+      <button class="close-btn" onclick="closePropModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nº da proposta *</label><input id="prop-numero" placeholder="88301"></div>
+      <div class="form-group"><label>Segurado *</label><input id="prop-segurado" placeholder="Nome do cliente/empresa"></div>
+      <div class="form-group"><label>Tipo de seguro</label>
+        <select id="prop-tipo"><option>Auto</option><option>Vida</option><option>Residencial</option><option>Empresarial</option></select>
+      </div>
+      <div class="form-group"><label>Data para lançar (se precisa esperar)</label><input type="date" id="prop-data"></div>
+      <div class="form-group"><label>Observações</label><textarea id="prop-obs" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePropModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePropModal()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROPOSTA — detalhe e ações -->
+<div class="modal-overlay" id="prop-detalhe-modal" onclick="if(event.target===this)closePropDetalheModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Proposta</h2>
+      <button class="close-btn" onclick="closePropDetalheModal()">×</button>
+    </div>
+    <div class="modal-body" id="prop-detalhe-body"></div>
+    <div class="modal-footer" id="prop-detalhe-footer"></div>
+  </div>
+</div>
+
+<!-- PROPOSTA — motivo do lançamento manual -->
+<div class="modal-overlay" id="prop-manual-modal" onclick="if(event.target===this)closePropManualModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Lançamento manual</h2>
+      <button class="close-btn" onclick="closePropManualModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Por que não foi possível importar?</label><textarea id="prop-manual-motivo" rows="3" placeholder="Ex: apólice multi-item, ERP não aceita"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePropManualModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarLancamentoManualProp()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -1900,7 +1972,7 @@ function goTo(view, el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(el) el.classList.add('active');
-  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', oportunidades:'Oportunidades', aniversarios:'Aniversários', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
+  const titles = {dashboard:'Visão Geral', lista:'Contatos', campanhas:'Campanhas', oportunidades:'Oportunidades', aniversarios:'Aniversários', propostas:'Propostas', lembretes:'Agenda', exportar:'Exportar', importar:'Importar Clientes', grupos:'Grupos', master:'Visão Master'};
   document.getElementById('topbar-title').textContent = titles[view]||view;
   if(view==='dashboard'){ 
     Promise.all([loadCampaigns(), loadAllCampContactsForAgenda(), loadAgendaEventos()]).then(()=>renderDashboard()); 
@@ -1917,6 +1989,7 @@ function goTo(view, el){
     if(divider) divider.style.display = isSecretaria && !isMaster ? 'none' : '';
     renderAniversarios();
   }
+  if(view==='propostas'){ loadPropostas().then(renderPropostas); }
   if(view==='lembretes'){ Promise.all([loadAllCampContactsForAgenda(), loadAgendaEventos()]).then(()=>renderLembretes()); }
   if(view==='grupos') renderGrupos();
   if(view==='master') renderMaster();
@@ -2487,6 +2560,224 @@ function onDrop(e, colKey){
   if(dragId && contacts[dragId]) moveCard(dragId, colKey);
 }
 
+// ─── PROPOSTAS (esteira de lançamento no ERP) ─────────────────────────────────
+// Tabela própria (propostas_esteira), sem relação com contacts/campaigns/opportunity_*.
+const PROP_STATUS = [
+  {key:'aguardando_data', label:'Aguardando data',        cls:'col-aguardando'},
+  {key:'para_lancar',     label:'Para lançar / importar', cls:'col-paralancar'},
+  {key:'lancada_auto',    label:'Lançada (automática)',   cls:'col-lancadaauto'},
+  {key:'lancada_manual',  label:'Lançada (manual)',       cls:'col-lancadamanual'},
+  {key:'concluida',       label:'Concluída',              cls:'col-concluida'},
+];
+let propostas = [];
+let dragPropId = null;
+let currentPropId = null;
+
+async function loadPropostas(){
+  const {data, error} = await sb.from('propostas_esteira').select('*').order('created_at',{ascending:false});
+  if(!error) propostas = data||[];
+}
+
+function renderPropostas(){
+  const board = document.getElementById('prop-kanban-board');
+  if(!board) return;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  board.innerHTML = PROP_STATUS.map(col=>{
+    const items = propostas
+      .filter(p=>p.status===col.key)
+      .sort((a,b)=>(a.data_lancamento||'9999').localeCompare(b.data_lancamento||'9999')||(b.created_at||'').localeCompare(a.created_at||''));
+
+    const cardsHtml = items.length ? items.map(p=>{
+      const semClassificar = !p.numero_proposta && !p.segurado;
+      const overdue = col.key==='aguardando_data' && p.data_lancamento && new Date(p.data_lancamento+'T00:00:00') < hoje;
+      const metaLine = col.key==='aguardando_data'
+        ? (overdue ? `⚠ atrasada — ${fmtDate(p.data_lancamento)}` : `lançar em ${fmtDate(p.data_lancamento)}`)
+        : (semClassificar ? 'PDF novo — a classificar' : (p.segurado||''));
+      return `<div class="kanban-card" draggable="true" data-id="${p.id}"
+        ondragstart="onPropDragStart(event,'${p.id}')" ondragend="onPropDragEnd(event)">
+        <div class="kc-name">${p.numero_proposta || p.arquivo_nome || 'Proposta sem número'}</div>
+        <div class="kc-meta"><span class="kc-phone"${overdue?' style="color:var(--red);font-weight:600"':''}>${metaLine}</span></div>
+        <div class="kc-actions">
+          <button class="kc-btn edit" onclick="openPropDetalhe('${p.id}')">✏️ Abrir</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="kanban-empty">Vazio</div>`;
+
+    return `<div class="kanban-col ${col.cls}">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title">${col.label}</span>
+        <span class="kanban-col-count">${items.length}</span>
+      </div>
+      <div class="kanban-drop-zone" data-col="${col.key}"
+        ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)"
+        ondrop="onPropDrop(event,'${col.key}')">
+        ${cardsHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function onPropDragStart(e, id){
+  dragPropId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(()=>{ const el=document.querySelector(`.kanban-card[data-id="${id}"]`); if(el) el.classList.add('dragging'); }, 0);
+}
+function onPropDragEnd(e){
+  document.querySelectorAll('.kanban-card.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.kanban-drop-zone.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  dragPropId = null;
+}
+function onPropDrop(e, colKey){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(dragPropId) movePropCard(dragPropId, colKey);
+}
+
+async function movePropCard(id, newStatus){
+  const p = propostas.find(x=>x.id===id);
+  if(!p) return;
+  if((newStatus==='lancada_auto'||newStatus==='lancada_manual') && (!p.numero_proposta||!p.segurado)){
+    showToast('Preencha nº da proposta e segurado antes de marcar como lançada');
+    return;
+  }
+  if(newStatus==='lancada_manual'){
+    currentPropId = id;
+    openPropManualModal();
+    return;
+  }
+  const payload = {status:newStatus, updated_at:new Date().toISOString()};
+  Object.assign(p, payload);
+  const {error} = await sb.from('propostas_esteira').update(payload).eq('id', id);
+  if(error){ showToast('Erro ao mover: '+error.message); return; }
+  renderPropostas();
+}
+
+function openPropModal(){
+  document.getElementById('prop-numero').value='';
+  document.getElementById('prop-segurado').value='';
+  document.getElementById('prop-tipo').value='Auto';
+  document.getElementById('prop-data').value='';
+  document.getElementById('prop-obs').value='';
+  document.getElementById('prop-modal').classList.add('open');
+}
+function closePropModal(){ document.getElementById('prop-modal').classList.remove('open'); }
+
+async function savePropModal(){
+  const numero_proposta = document.getElementById('prop-numero').value.trim();
+  const segurado = document.getElementById('prop-segurado').value.trim();
+  if(!numero_proposta || !segurado){ showToast('Preencha nº da proposta e segurado'); return; }
+  const data_lancamento = document.getElementById('prop-data').value || null;
+  const payload = {
+    numero_proposta, segurado,
+    tipo: document.getElementById('prop-tipo').value,
+    observacoes: document.getElementById('prop-obs').value.trim(),
+    data_lancamento,
+    status: data_lancamento ? 'aguardando_data' : 'para_lancar',
+    registrado_por: currentUser?.id || null,
+  };
+  const {data, error} = await sb.from('propostas_esteira').insert(payload).select().single();
+  if(error){ showToast('Erro ao salvar: '+error.message); return; }
+  propostas.unshift(data);
+  closePropModal();
+  renderPropostas();
+  showToast('Proposta cadastrada');
+}
+
+function openPropDetalhe(id){
+  currentPropId = id;
+  const p = propostas.find(x=>x.id===id);
+  if(!p) return;
+
+  const acoes = {
+    aguardando_data: `<button class="btn btn-secondary btn-sm" onclick="mudarStatusProp('para_lancar')">Marcar pronta pra lançar</button>`,
+    para_lancar:      `<button class="btn btn-primary btn-sm" onclick="mudarStatusProp('lancada_auto')">✓ Importação automática</button>
+                       <button class="btn btn-secondary btn-sm" onclick="abrirMotivoManualProp()">Lançada manualmente</button>`,
+    lancada_auto:     `<button class="btn btn-secondary btn-sm" onclick="mudarStatusProp('concluida')">Marcar concluída</button>`,
+    lancada_manual:   `<button class="btn btn-secondary btn-sm" onclick="mudarStatusProp('concluida')">Marcar concluída</button>`,
+    concluida:        `<button class="btn btn-secondary btn-sm" onclick="mudarStatusProp('para_lancar')">Reabrir</button>`,
+  };
+
+  document.getElementById('prop-detalhe-body').innerHTML = `
+    <span class="badge-count" style="margin-bottom:12px;display:inline-block">${PROP_STATUS.find(s=>s.key===p.status)?.label||p.status}</span>
+    ${p.arquivo_nome ? `<div class="form-group"><label>Arquivo na pasta de rede</label><div style="font-size:12px;color:var(--gray-600)">${p.arquivo_caminho||p.arquivo_nome}</div></div>` : ''}
+    <div class="form-group"><label>Nº da proposta${!p.numero_proposta?' *':''}</label><input id="propd-numero" value="${p.numero_proposta||''}" placeholder="Abra o PDF e digite o número"></div>
+    <div class="form-group"><label>Segurado${!p.segurado?' *':''}</label><input id="propd-segurado" value="${p.segurado||''}" placeholder="Nome do cliente/empresa"></div>
+    <div class="form-group"><label>Tipo</label>
+      <select id="propd-tipo">${['Auto','Vida','Residencial','Empresarial'].map(t=>`<option ${p.tipo===t?'selected':''}>${t}</option>`).join('')}</select>
+    </div>
+    <div class="form-group"><label>Data para lançar</label><input type="date" id="propd-data" value="${p.data_lancamento||''}"></div>
+    <div class="form-group"><label>Observações</label><textarea id="propd-obs" rows="3">${p.observacoes||''}</textarea></div>
+    ${p.motivo_manual ? `<div class="form-group"><label>Motivo do lançamento manual</label><div style="font-size:12px;color:var(--gray-600)">${p.motivo_manual}</div></div>` : ''}
+  `;
+  document.getElementById('prop-detalhe-footer').innerHTML = `
+    <button class="btn btn-secondary" style="margin-right:auto;color:var(--red)" onclick="deletePropCard()">Excluir</button>
+    ${acoes[p.status]||''}
+    <button class="btn btn-secondary" onclick="salvarEdicaoProp()">Salvar</button>
+  `;
+  document.getElementById('prop-detalhe-modal').classList.add('open');
+}
+function closePropDetalheModal(){ document.getElementById('prop-detalhe-modal').classList.remove('open'); }
+
+async function mudarStatusProp(status, extra={}){
+  const p = propostas.find(x=>x.id===currentPropId);
+  if(!p) return;
+  if((status==='lancada_auto'||status==='lancada_manual') && (!p.numero_proposta||!p.segurado)){
+    showToast('Preencha nº da proposta e segurado antes de marcar como lançada');
+    return;
+  }
+  const payload = Object.assign({status, updated_at:new Date().toISOString()}, extra);
+  Object.assign(p, payload);
+  const {error} = await sb.from('propostas_esteira').update(payload).eq('id', p.id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  renderPropostas();
+  closePropDetalheModal();
+  showToast('Status atualizado');
+}
+
+function abrirMotivoManualProp(){ openPropManualModal(); }
+function openPropManualModal(){
+  document.getElementById('prop-manual-motivo').value='';
+  document.getElementById('prop-manual-modal').classList.add('open');
+}
+function closePropManualModal(){ document.getElementById('prop-manual-modal').classList.remove('open'); }
+
+async function confirmarLancamentoManualProp(){
+  const motivo = document.getElementById('prop-manual-motivo').value.trim();
+  closePropManualModal();
+  await mudarStatusProp('lancada_manual', {motivo_manual: motivo});
+}
+
+async function salvarEdicaoProp(){
+  const p = propostas.find(x=>x.id===currentPropId);
+  if(!p) return;
+  const payload = {
+    numero_proposta: document.getElementById('propd-numero').value.trim(),
+    segurado: document.getElementById('propd-segurado').value.trim(),
+    tipo: document.getElementById('propd-tipo').value,
+    data_lancamento: document.getElementById('propd-data').value || null,
+    observacoes: document.getElementById('propd-obs').value.trim(),
+  };
+  if(p.status==='aguardando_data' && !payload.data_lancamento) payload.status='para_lancar';
+  if(p.status==='para_lancar' && payload.data_lancamento) payload.status='aguardando_data';
+  Object.assign(p, payload);
+  const {error} = await sb.from('propostas_esteira').update(payload).eq('id', p.id);
+  if(error){ showToast('Erro: '+error.message); return; }
+  renderPropostas();
+  openPropDetalhe(p.id);
+  showToast('Alterações salvas');
+}
+
+async function deletePropCard(){
+  if(!currentPropId) return;
+  const {error} = await sb.from('propostas_esteira').delete().eq('id', currentPropId);
+  if(error){ showToast('Erro: '+error.message); return; }
+  propostas = propostas.filter(p=>p.id!==currentPropId);
+  closePropDetalheModal();
+  renderPropostas();
+  showToast('Proposta excluída');
+}
+
 // ─── LEMBRETES ───────────────────────────────────────────────────────────────
 function renderLembretes(){
   const tod = today();
@@ -2922,6 +3213,7 @@ async function initApp(user){
     document.querySelectorAll('.nav-item').forEach(n=>n.style.display='none');
     document.querySelectorAll('.nav-section').forEach(n=>n.style.display='none');
     document.getElementById('nav-aniversarios').style.display='';
+    document.getElementById('nav-propostas').style.display='';
     // Auto-filter by their base
     if(userRole==='secretaria_egs') anivSource = IMP_SOURCE_KEY;
     if(userRole==='secretaria_investseg') anivSource = IMP_TELEPORT_KEY;

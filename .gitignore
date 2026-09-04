@@ -1,0 +1,4 @@
+.env
+watcher/.env
+__pycache__/
+*.pyc
