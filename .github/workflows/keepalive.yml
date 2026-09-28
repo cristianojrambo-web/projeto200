@@ -12,7 +12,9 @@ jobs:
     steps:
       - name: Ping Supabase REST API
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://gzzpcorctunadifxweea.supabase.co/rest/v1/ -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://gzzpcorctunadifxweea.supabase.co/rest/v1/" \
+            -H "apikey: sb_publishable_5uowcjcikibBLXFj7z60nQ_pKoRzxgD")
           echo "Supabase responded with HTTP $STATUS"
           if [ "$STATUS" -ge 500 ]; then
             echo "::warning::Supabase returned $STATUS"
